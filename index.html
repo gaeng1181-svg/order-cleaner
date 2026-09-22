@@ -1,6 +1,6 @@
 <!doctype html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>업무 도구</title><link rel="stylesheet" href="styles.css"></head><body>
 <div class="app-shell"><header class="topbar"><div class="brand-mark">O</div><div><h1>업무 도구</h1><p>주문서 · 쿠팡 발주 · 쉽먼트 · 주소 · 송장</p></div></header>
-<nav class="tabs" id="tabs"><button class="tab is-active" data-tab="order" onclick="switchTab('order', this)">주문서 정리</button><button class="tab" data-tab="po" onclick="switchTab('po', this)">쿠팡 발주 정리</button><button class="tab" data-tab="shipment" onclick="switchTab('shipment', this)">쉽먼트/송장</button><button class="tab" data-tab="address" onclick="switchTab('address', this)">주소 관리</button><button class="tab" data-tab="tracking" onclick="switchTab('tracking', this)">운송장 매칭</button></nav>
+<nav class="tabs" id="tabs"><button class="tab is-active" data-tab="order" onclick="switchTab('order', this)">주문서 정리</button><button class="tab" data-tab="po" onclick="switchTab('po', this)">쿠팡 발주 정리</button><button class="tab" data-tab="shipment" onclick="switchTab('shipment', this)">쉽먼트·송장</button><button class="tab" data-tab="tracking" onclick="switchTab('tracking', this)">운송장 매칭</button><button class="tab" data-tab="pdf" onclick="switchTab('pdf', this)">PDF 정리</button><button class="tab" data-tab="address" onclick="switchTab('address', this)">주소 관리</button></nav>
 <main>
 <section class="workspace tabpanel" id="panel-order"><div class="workspace-heading"><div><span class="eyebrow">ORDER WORKBOOK</span><h2>주문서 정리 <small>v2.4</small></h2></div><span class="local-badge">로컬 처리</span></div>
 <div class="drop-zone" id="dropZone"><input id="fileInput" type="file" accept=".xlsx" hidden><div class="file-copy"><strong id="fileName">정리할 엑셀 파일을 선택하세요</strong><span id="fileDetail">.xlsx · 기존 v1.7 규칙 유지</span></div><button id="selectButton" class="secondary-button">엑셀 파일 선택</button></div>
@@ -16,6 +16,15 @@
 <div class="inline-form"><input id="addrCenter" placeholder="센터명"><input id="addrPhone" placeholder="전화번호"><input id="addrAddress" class="grow" placeholder="주소"><button id="addrAdd" class="primary-button">추가/수정</button></div><div class="table-wrap"><table id="addrTable"><thead><tr><th>센터명</th><th>전화번호</th><th>주소</th><th></th></tr></thead><tbody></tbody></table></div></section>
 
 <section class="workspace wide tabpanel" id="panel-tracking" hidden><div class="workspace-heading"><div><span class="eyebrow">TRACKING</span><h2>운송장 매칭</h2></div></div><p class="help">택배사 출력 엑셀의 <b>P열 수하인명</b>과 <b>G열 운송장번호</b>를 읽어 중복을 제거해 표시합니다.</p><div class="toolbar"><input id="trackingInput" type="file" accept=".xlsx" hidden><button id="trackingSelect" class="secondary-button">송장 결과 엑셀 업로드</button><button id="trackingDownload" class="primary-button" disabled>매칭 결과 다운로드</button></div><div id="trackingSummary" class="summary"></div><div class="table-wrap"><table id="trackingTable"><thead><tr><th>수하인명</th><th>운송장번호</th><th>상태</th></tr></thead><tbody></tbody></table></div></section>
+<section class="workspace tabpanel" id="panel-pdf" hidden>
+<div class="workspace-heading"><div><span class="eyebrow">COUPANG PDF</span><h2>PDF 정리</h2></div><span class="local-badge">로컬 처리</span></div>
+<p class="help">Coupang Submission Copy 구간만 남기고 Vendor Storage Copy 구간을 제외합니다. 원본 PDF는 변경하지 않으며 파일은 서버로 전송하지 않습니다.</p>
+<div class="drop-zone" id="pdfDropZone"><input id="pdfInput" type="file" accept=".pdf,application/pdf" hidden><div class="file-copy"><strong id="pdfName">거래명세서 PDF를 선택하거나 여기에 드롭하세요</strong><span>페이지의 크기·방향·바코드·레이아웃을 그대로 보존합니다.</span></div><button id="pdfSelect" class="secondary-button">PDF 선택</button></div>
+<div class="summary" aria-live="polite">전체 페이지 <strong id="pdfTotal">—</strong> · 출력 대상 <strong id="pdfIncluded">—</strong> · 제외된 Vendor Storage Copy <strong id="pdfExcluded">—</strong></div>
+<p class="help" id="pdfPages" style="overflow-wrap:anywhere"></p>
+<div class="action-row"><span id="pdfStatus" class="status" role="status" aria-live="polite">PDF를 선택하면 분석을 시작합니다.</span><button id="pdfDownload" class="primary-button" disabled>정리된 PDF 다운로드</button></div>
+<div id="pdfError" class="error-box" role="alert" hidden></div>
+</section>
 </main></div><script>
 function switchTab(name, button) {
   document.querySelectorAll("#tabs .tab").forEach(function(b){ b.classList.remove("is-active"); });
@@ -25,4 +34,4 @@ function switchTab(name, button) {
   if (panel) { panel.hidden = false; panel.style.display = "block"; }
   if (name === "address" && typeof window.renderAddresses === "function") window.renderAddresses();
 }
-</script><script src="vendor/exceljs.min.js"></script><script src="default-addresses.js"></script><script src="app.js"></script></body></html>
+</script><script src="vendor/exceljs.min.js"></script><script src="default-addresses.js"></script><script src="app.js"></script><script src="pdf-ui.js"></script></body></html>
