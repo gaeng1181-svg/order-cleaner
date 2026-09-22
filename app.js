@@ -456,6 +456,23 @@
   const download = (blob, name) => { const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),60000); };
   const text = (v) => v == null ? "" : (typeof v === "object" && v.text != null ? String(v.text) : String(v)).trim();
 
+  function compareNumericText(a,b){
+    const left=text(a),right=text(b);
+    if(/^\d+$/.test(left)&&/^\d+$/.test(right)){
+      const leftNumber=BigInt(left),rightNumber=BigInt(right);
+      if(leftNumber<rightNumber)return -1;
+      if(leftNumber>rightNumber)return 1;
+    }
+    return left.localeCompare(right,'ko',{numeric:true});
+  }
+
+  function sortCoupangRows(rows){
+    const poSets=new Map();
+    rows.forEach(x=>{if(!poSets.has(x.center))poSets.set(x.center,new Set());poSets.get(x.center).add(text(x.po));});
+    rows.sort((a,b)=>(poSets.get(b.center).size-poSets.get(a.center).size)||a.center.localeCompare(b.center,'ko')||compareNumericText(a.po,b.po)||compareNumericText(a.sku,b.sku)||((a.sourceIndex??0)-(b.sourceIndex??0)));
+    return poSets;
+  }
+
   document.querySelectorAll('#tabs .tab').forEach(btn => btn.addEventListener('click', () => {
     document.querySelectorAll('#tabs .tab').forEach(x=>x.classList.toggle('is-active',x===btn));
     document.querySelectorAll('.tabpanel').forEach(p=>p.hidden=true);
@@ -472,7 +489,12 @@
     s=s.replace(/\s+부력보조복(?=\s|$|[,/])/g,'');
     s=s.replace(/\s+구명조끼(?=\s|$|[,/])/g,'');
     s=s.replace(/2\s*종\s*세트/g,'(1+1)');
-    s=s.replace(/,/g,' ');
+    const commaParts=s.split(/\s*,\s*/);
+    const optionPart=/^(?:(?:옵션|색상|사이즈)\s*[:：]\s*)?(?:(?:블랙|화이트|레드|네이비|그레이|회색|차콜|베이지|브라운|카키|그린|블루|옐로우|오렌지|핑크|퍼플|민트|아이보리|검정|흰색|빨강|파랑|노랑|초록)\s*)?(?:(?:FREE|XS|S|M|L|(?:[2-9]|1\d)XL|\d{2,3})(?:\s*(?:FREE|XS|S|M|L|(?:[2-9]|1\d)XL|\d{2,3}))*)?$/i;
+    const firstOption=commaParts.findIndex(part=>optionPart.test(part.trim())&&part.trim());
+    if(commaParts.length>1){
+      s=commaParts.map((part,index)=>index===0?part:`${firstOption>=0&&index>firstOption?'+':' '}${part}`).join('');
+    }
     s=s.replace(/\s*\+\s*/g,'+');
     return s.replace(/\s+/g,' ').trim();
   }
@@ -505,8 +527,7 @@
       const h=rows[0], idx=(n)=>h.indexOf(n); const req=['발주번호','SKU ID','SKU 이름','SKU Barcode','물류센터','확정수량','매입가'];
       for(const n of req) if(idx(n)<0) throw new Error(`필수 열 '${n}'을 찾을 수 없습니다.`);
       const data=[]; rows.slice(1).forEach((r,sourceIndex)=>{const center=text(r[idx('물류센터')]),qty=Number(String(r[idx('확정수량')]).replace(/,/g,''));if(!center||!qty)return;data.push({center,po:Number(r[idx('발주번호')]),sku:text(r[idx('SKU ID')]),name:cleanCoupangPoName(r[idx('SKU 이름')]),qty,price:Number(String(r[idx('매입가')]).replace(/,/g,''))||0,barcode:text(r[idx('SKU Barcode')]),sourceIndex});});
-      const poSets=new Map(); data.forEach(x=>{if(!poSets.has(x.center))poSets.set(x.center,new Set());poSets.get(x.center).add(x.po);});
-      data.sort((a,b)=>(poSets.get(b.center).size-poSets.get(a.center).size)||a.center.localeCompare(b.center,'ko')||(a.po-b.po)||(a.sourceIndex-b.sourceIndex));
+      const poSets=sortCoupangRows(data);
       const wb=new ExcelJS.Workbook(),ws=wb.addWorksheet('발주정리'); ws.columns=[{width:14},{width:15},{width:15},{width:62},{width:11},{width:8},{width:13},{width:20}];
       ws.addRow(['물류센터','발주번호','SKU ID','SKU 이름','확정수량','','매입가','SKU Barcode']); ws.getRow(1).font={bold:true,size:16};
       let lastKey=''; for(const x of data){const key=x.center+'|'+x.po;if(key!==lastKey){const rr=ws.addRow(['','','',`${x.center} - ${x.po}`,'','','','']);rr.getCell(4).font={bold:true,color:{argb:'FFFF0000'},size:16};lastKey=key;} ws.addRow([x.center,x.po,x.sku,x.name,x.qty,'',x.price,x.barcode]);}
@@ -533,7 +554,7 @@
   // ---------- Shipment split ----------
   let shipmentRows=[];
   $('shipSelect').onclick=()=>$('shipInput').click();
-  $('shipInput').onchange=async()=>{const f=$('shipInput').files[0];if(!f)return;try{const wb=new ExcelJS.Workbook();await wb.xlsx.load(await f.arrayBuffer());const ws=wb.getWorksheet('발주정리')||wb.worksheets[0];const arr=[];for(let r=2;r<=ws.rowCount;r++){const center=text(ws.getCell(r,1).value),po=text(ws.getCell(r,2).value);if(!center||!po)continue;arr.push({center,po,sku:text(ws.getCell(r,3).value),name:text(ws.getCell(r,4).value),qty:Number(ws.getCell(r,5).value)||0,barcode:text(ws.getCell(r,8).value),splits:[{box:'',qty:''}]});}if(!arr.length)throw new Error('발주 상품행을 찾지 못했습니다.');shipmentRows=arr;renderShipment();$('shipSave').disabled=false;$('addressExport').disabled=false;}catch(e){alert('불러오기 오류: '+e.message);}finally{$('shipInput').value='';}};
+  $('shipInput').onchange=async()=>{const f=$('shipInput').files[0];if(!f)return;try{const wb=new ExcelJS.Workbook();await wb.xlsx.load(await f.arrayBuffer());const ws=wb.getWorksheet('발주정리')||wb.worksheets[0];const arr=[];for(let r=2;r<=ws.rowCount;r++){const center=text(ws.getCell(r,1).value),po=text(ws.getCell(r,2).value);if(!center||!po)continue;arr.push({center,po,sku:text(ws.getCell(r,3).value),name:text(ws.getCell(r,4).value),qty:Number(ws.getCell(r,5).value)||0,barcode:text(ws.getCell(r,8).value),sourceIndex:r,splits:[{box:'',qty:''}]});}if(!arr.length)throw new Error('발주 상품행을 찾지 못했습니다.');sortCoupangRows(arr);shipmentRows=arr;renderShipment();$('shipSave').disabled=false;$('addressExport').disabled=false;}catch(e){alert('불러오기 오류: '+e.message);}finally{$('shipInput').value='';}};
   function renderShipment(){const tb=$('shipTable').querySelector('tbody');tb.innerHTML='';let total=0,done=0;shipmentRows.forEach((item,i)=>{item.splits.forEach((sp,j)=>{const tr=document.createElement('tr');if(j===0){tr.innerHTML=`<td>${esc(item.center)}</td><td>${esc(item.po)}</td><td>${esc(item.sku)}</td><td class="wrap">${esc(item.name)}</td><td>${esc(item.barcode)}</td><td>${item.qty}</td>`;}else tr.innerHTML='<td></td><td></td><td></td><td class="wrap">↳ 박스 분할</td><td></td><td></td>';const tdBox=document.createElement('td'),ib=document.createElement('input');ib.type='number';ib.min='1';ib.value=sp.box;ib.oninput=()=>{sp.box=ib.value;updateShipSummary();};tdBox.appendChild(ib);const tdQty=document.createElement('td'),iq=document.createElement('input');iq.type='number';iq.min='0';iq.value=sp.qty;iq.oninput=()=>{sp.qty=iq.value;updateShipSummary();};tdQty.appendChild(iq);const act=document.createElement('td'),btn=document.createElement('button');btn.className='mini';btn.textContent=j===0?'+ 분할':'삭제';btn.onclick=()=>{if(j===0)item.splits.push({box:'',qty:''});else item.splits.splice(j,1);renderShipment();};act.appendChild(btn);tr.append(tdBox,tdQty,act);tb.appendChild(tr);});total++;if(splitSum(item)===item.qty&&item.splits.every(s=>s.box&&Number(s.qty)>0))done++;});$('shipSummary').textContent=`상품 ${total}건 · 수량/박스 입력 완료 ${done}건`;}
   const splitSum=(item)=>item.splits.reduce((s,x)=>s+(Number(x.qty)||0),0);
   function updateShipSummary(){let done=0;shipmentRows.forEach(i=>{if(splitSum(i)===i.qty&&i.splits.every(s=>s.box&&Number(s.qty)>0))done++;});$('shipSummary').innerHTML=`상품 ${shipmentRows.length}건 · 완료 ${done}건`+(done<shipmentRows.length?' <span class="warn">(수량 합계 또는 박스번호 확인 필요)</span>':' <span class="ok">완료</span>');}
