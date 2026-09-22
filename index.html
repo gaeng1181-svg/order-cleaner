@@ -1,0 +1,28 @@
+<!doctype html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>업무 도구</title><link rel="stylesheet" href="styles.css"></head><body>
+<div class="app-shell"><header class="topbar"><div class="brand-mark">O</div><div><h1>업무 도구</h1><p>주문서 · 쿠팡 발주 · 쉽먼트 · 주소 · 송장</p></div></header>
+<nav class="tabs" id="tabs"><button class="tab is-active" data-tab="order" onclick="switchTab('order', this)">주문서 정리</button><button class="tab" data-tab="po" onclick="switchTab('po', this)">쿠팡 발주 정리</button><button class="tab" data-tab="shipment" onclick="switchTab('shipment', this)">쉽먼트/송장</button><button class="tab" data-tab="address" onclick="switchTab('address', this)">주소 관리</button><button class="tab" data-tab="tracking" onclick="switchTab('tracking', this)">운송장 매칭</button></nav>
+<main>
+<section class="workspace tabpanel" id="panel-order"><div class="workspace-heading"><div><span class="eyebrow">ORDER WORKBOOK</span><h2>주문서 정리 <small>v2.4</small></h2></div><span class="local-badge">로컬 처리</span></div>
+<div class="drop-zone" id="dropZone"><input id="fileInput" type="file" accept=".xlsx" hidden><div class="file-copy"><strong id="fileName">정리할 엑셀 파일을 선택하세요</strong><span id="fileDetail">.xlsx · 기존 v1.7 규칙 유지</span></div><button id="selectButton" class="secondary-button">엑셀 파일 선택</button></div>
+<div class="action-row"><div id="status" class="status" data-state="ready"><span class="status-dot"></span><span id="statusText">파일을 선택하면 실행할 수 있습니다.</span></div><button id="runButton" class="primary-button" disabled>주문서 정리 실행 →</button></div><div id="errorBox" class="error-box" hidden></div></section>
+
+<section class="workspace tabpanel" id="panel-po" hidden><div class="workspace-heading"><div><span class="eyebrow">COUPANG PO</span><h2>쿠팡 발주 정리</h2></div></div><p class="help">쿠팡 PO CSV를 넣으면 센터별 <b>고유 발주번호 개수</b>가 많은 센터부터, 센터 안에서는 발주번호 오름차순으로 정리합니다.</p>
+<div class="drop-zone compact" id="poDropZone"><input id="poInput" type="file" accept=".csv,text/csv" hidden><div class="file-copy"><strong id="poName">PO_SKU_LIST CSV를 선택하거나 여기에 드랍하세요</strong><span>CSV 클릭 선택·드래그 앤 드롭 지원 / 물류센터 공란·확정수량 0 제외</span></div><label for="poInput" id="poSelect" class="secondary-button file-label" role="button">CSV 선택</label></div><div class="action-row"><span id="poStatus" class="status">파일을 선택하세요.</span><button id="poRun" class="primary-button" disabled>발주서 생성 →</button></div></section>
+
+<section class="workspace wide tabpanel" id="panel-shipment" hidden><div class="workspace-heading"><div><span class="eyebrow">SHIPMENT</span><h2>쉽먼트 / 박스 분할</h2></div></div><p class="help">발주 정리 결과를 불러온 뒤 인쇄물에 적힌 박스번호와 박스별 수량을 입력합니다. 같은 상품은 + 버튼으로 여러 박스로 분할할 수 있습니다.</p>
+<div class="toolbar"><input id="shipInput" type="file" accept=".xlsx" hidden><button id="shipSelect" class="secondary-button">발주 정리 파일 불러오기</button><button id="shipSave" class="secondary-button" disabled>박스작업 저장</button><button id="addressExport" class="primary-button" disabled>송장용 엑셀 생성</button></div><div id="shipSummary" class="summary"></div><div class="table-wrap"><table id="shipTable"><thead><tr><th>센터</th><th>발주번호</th><th>상품번호</th><th>SKU 명</th><th>바코드</th><th>총수량</th><th>박스번호</th><th>박스수량</th><th></th></tr></thead><tbody></tbody></table></div></section>
+
+<section class="workspace wide tabpanel" id="panel-address" hidden><div class="workspace-heading"><div><span class="eyebrow">ADDRESS BOOK</span><h2>쿠팡 센터 주소 관리</h2></div></div><p class="help">현재 주소록은 이 브라우저에 저장됩니다. 엑셀 전체 업로드/다운로드로 백업할 수 있습니다.</p><div class="toolbar"><input id="addrInput" type="file" accept=".xlsx" hidden><button id="addrUpload" class="secondary-button">주소 엑셀 전체 업로드</button><button id="addrDownload" class="secondary-button">주소 전체 다운로드</button><button id="addrReset" class="secondary-button">기본 주소 복원</button></div>
+<div class="inline-form"><input id="addrCenter" placeholder="센터명"><input id="addrPhone" placeholder="전화번호"><input id="addrAddress" class="grow" placeholder="주소"><button id="addrAdd" class="primary-button">추가/수정</button></div><div class="table-wrap"><table id="addrTable"><thead><tr><th>센터명</th><th>전화번호</th><th>주소</th><th></th></tr></thead><tbody></tbody></table></div></section>
+
+<section class="workspace wide tabpanel" id="panel-tracking" hidden><div class="workspace-heading"><div><span class="eyebrow">TRACKING</span><h2>운송장 매칭</h2></div></div><p class="help">택배사 출력 엑셀의 <b>P열 수하인명</b>과 <b>G열 운송장번호</b>를 읽어 중복을 제거해 표시합니다.</p><div class="toolbar"><input id="trackingInput" type="file" accept=".xlsx" hidden><button id="trackingSelect" class="secondary-button">송장 결과 엑셀 업로드</button><button id="trackingDownload" class="primary-button" disabled>매칭 결과 다운로드</button></div><div id="trackingSummary" class="summary"></div><div class="table-wrap"><table id="trackingTable"><thead><tr><th>수하인명</th><th>운송장번호</th><th>상태</th></tr></thead><tbody></tbody></table></div></section>
+</main></div><script>
+function switchTab(name, button) {
+  document.querySelectorAll("#tabs .tab").forEach(function(b){ b.classList.remove("is-active"); });
+  if (button) button.classList.add("is-active");
+  document.querySelectorAll(".tabpanel").forEach(function(p){ p.hidden = true; p.style.display = "none"; });
+  var panel = document.getElementById("panel-" + name);
+  if (panel) { panel.hidden = false; panel.style.display = "block"; }
+  if (name === "address" && typeof window.renderAddresses === "function") window.renderAddresses();
+}
+</script><script src="vendor/exceljs.min.js"></script><script src="default-addresses.js"></script><script src="app.js"></script></body></html>
