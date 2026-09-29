@@ -1,4 +1,4 @@
-<!doctype html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>업무 도구</title><link rel="stylesheet" href="styles.css"></head><body>
+<!doctype html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>업무 도구</title><link rel="stylesheet" href="styles.css?v=pdf-print-1"></head><body>
 <div class="app-shell"><header class="topbar"><div class="brand-mark">O</div><div><h1>업무 도구</h1><p>주문서 · 쿠팡 발주 · 쉽먼트 · 주소 · 송장</p></div></header>
 <nav class="tabs" id="tabs"><button class="tab is-active" data-tab="order" onclick="switchTab('order', this)">주문서 정리</button><button class="tab" data-tab="po" onclick="switchTab('po', this)">쿠팡 발주 정리</button><button class="tab" data-tab="shipment" onclick="switchTab('shipment', this)">쉽먼트·송장</button><button class="tab" data-tab="tracking" onclick="switchTab('tracking', this)">운송장 매칭</button><button class="tab" data-tab="pdf" onclick="switchTab('pdf', this)">PDF 정리</button><button class="tab" data-tab="address" onclick="switchTab('address', this)">주소 관리</button></nav>
 <main>
@@ -34,4 +34,4 @@ function switchTab(name, button) {
   if (panel) { panel.hidden = false; panel.style.display = "block"; }
   if (name === "address" && typeof window.renderAddresses === "function") window.renderAddresses();
 }
-</script><script src="vendor/exceljs.min.js"></script><script src="default-addresses.js"></script><script src="app.js"></script><script src="pdf-ui.js"></script></body></html>
+</script><script src="vendor/exceljs.min.js"></script><script src="default-addresses.js"></script><script src="app.js"></script><script src="pdf-ui.js?v=pdf-print-2"></script></body></html>
