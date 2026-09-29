@@ -22,7 +22,7 @@
 <div class="drop-zone" id="pdfDropZone"><input id="pdfInput" type="file" accept=".pdf,application/pdf" hidden><div class="file-copy"><strong id="pdfName">거래명세서 PDF를 선택하거나 여기에 드롭하세요</strong><span>페이지의 크기·방향·바코드·레이아웃을 그대로 보존합니다.</span></div><button id="pdfSelect" class="secondary-button">PDF 선택</button></div>
 <div class="summary" aria-live="polite">전체 페이지 <strong id="pdfTotal">—</strong> · 출력 대상 <strong id="pdfIncluded">—</strong> · 제외된 Vendor Storage Copy <strong id="pdfExcluded">—</strong></div>
 <p class="help" id="pdfPages" style="overflow-wrap:anywhere"></p>
-<div class="action-row"><span id="pdfStatus" class="status" role="status" aria-live="polite">PDF를 선택하면 분석을 시작합니다.</span><button id="pdfDownload" class="primary-button" disabled>정리된 PDF 다운로드</button></div>
+<div class="action-row"><span id="pdfStatus" class="status" role="status" aria-live="polite">PDF를 선택하면 분석을 시작합니다.</span><div class="pdf-actions"><button id="pdfDownload" class="secondary-button" disabled>PDF 다운로드</button><button id="pdfPrint" class="primary-button" disabled>바로 인쇄</button></div></div>
 <div id="pdfError" class="error-box" role="alert" hidden></div>
 </section>
 </main></div><script>
