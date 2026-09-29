@@ -26,6 +26,9 @@
     frame.src = url;
     document.body.appendChild(frame);
     printFrame = frame;
+    // Chrome's built-in PDF viewer may not dispatch the iframe load event.
+    // The Blob URL is already attached, so allow the user gesture to invoke print immediately.
+    $('pdfPrint').disabled = false;
   };
   const showPrintFailure = () => {
     $('pdfStatus').textContent = '바로 인쇄를 열지 못했습니다. PDF 다운로드를 이용해 주세요.';
