@@ -469,7 +469,7 @@
   function sortCoupangRows(rows){
     const poSets=new Map();
     rows.forEach(x=>{if(!poSets.has(x.center))poSets.set(x.center,new Set());poSets.get(x.center).add(text(x.po));});
-    rows.sort((a,b)=>(poSets.get(b.center).size-poSets.get(a.center).size)||a.center.localeCompare(b.center,'ko')||compareNumericText(a.po,b.po)||compareNumericText(a.sku,b.sku)||((a.sourceIndex??0)-(b.sourceIndex??0)));
+    rows.sort((a,b)=>(poSets.get(b.center).size-poSets.get(a.center).size)||a.center.localeCompare(b.center,'ko')||compareNumericText(b.po,a.po)||compareNumericText(a.sku,b.sku)||((a.sourceIndex??0)-(b.sourceIndex??0)));
     return poSets;
   }
 
@@ -574,6 +574,6 @@
   let trackingRows=[];
   $('trackingSelect').onclick=()=>$('trackingInput').click();
   $('trackingInput').onchange=async()=>{const f=$('trackingInput').files[0];if(!f)return;try{const wb=new ExcelJS.Workbook();await wb.xlsx.load(await f.arrayBuffer());const ws=wb.worksheets[0],map=new Map(),conflicts=new Set();for(let r=2;r<=ws.rowCount;r++){const way=text(ws.getCell(r,7).value),recipient=text(ws.getCell(r,16).value);if(!recipient||!way)continue;if(map.has(recipient)&&map.get(recipient)!==way)conflicts.add(recipient);else map.set(recipient,way);}trackingRows=[...map].map(([recipient,waybill])=>({recipient,waybill,status:conflicts.has(recipient)?'확인 필요':'정상'})).sort((a,b)=>a.recipient.localeCompare(b.recipient,'ko',{numeric:true}));renderTracking();$('trackingDownload').disabled=!trackingRows.length;}catch(e){alert('송장 파일 오류: '+e.message);}finally{$('trackingInput').value='';}};
-  function renderTracking(){const tb=$('trackingTable').querySelector('tbody');tb.innerHTML='';trackingRows.forEach(x=>{const tr=document.createElement('tr');tr.innerHTML=`<td>${esc(x.recipient)}</td><td>${esc(x.waybill)}</td><td class="${x.status==='정상'?'ok':'warn'}">${x.status}</td>`;tb.appendChild(tr);});$('trackingSummary').textContent=`중복 제거 후 ${trackingRows.length}개 수하인명`;}
+  function renderTracking(){const tb=$('trackingTable').querySelector('tbody');tb.innerHTML='';let lastCenter='',groupIndex=-1;trackingRows.forEach(x=>{const center=x.recipient.replace(/_\d+$/,'');if(center!==lastCenter){lastCenter=center;groupIndex++;}const tr=document.createElement('tr');if(groupIndex%2===1)tr.classList.add('center-alt');tr.innerHTML=`<td>${esc(x.recipient)}</td><td>${esc(x.waybill)}</td><td class="${x.status==='정상'?'ok':'warn'}">${x.status}</td>`;tb.appendChild(tr);});$('trackingSummary').textContent=`중복 제거 후 ${trackingRows.length}개 수하인명`;}
   $('trackingDownload').onclick=async()=>{const wb=new ExcelJS.Workbook(),ws=wb.addWorksheet('운송장매칭');ws.addRow(['수하인명','운송장번호','상태']);trackingRows.forEach(x=>ws.addRow([x.recipient,x.waybill,x.status]));const buf=await wb.xlsx.writeBuffer();download(new Blob([buf]),'쿠팡_운송장매칭.xlsx');};
 })();

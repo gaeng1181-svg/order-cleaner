@@ -173,6 +173,7 @@ h2 small { color: var(--muted); font-size: .72rem; font-weight: 650; letter-spac
 #poDropZone.is-dragging{border-color:var(--green);background:var(--green-pale);}
 #shipTable tbody tr.group-alt > td{background:#f5f9f7;}
 #shipTable tbody tr.group-alt input{background:#fff;}
+#trackingTable tbody tr.center-alt > td{background:#f2f5f3;}
 .pdf-actions{display:flex;align-items:center;gap:10px;}
 .pdf-actions .primary-button{min-width:140px;justify-content:center;}
 .pdf-actions .secondary-button{min-width:140px;}
