@@ -179,4 +179,8 @@ h2 small { color: var(--muted); font-size: .72rem; font-weight: 650; letter-spac
 .pdf-actions .secondary-button{min-width:140px;}
 .pdf-actions button:disabled{cursor:not-allowed;opacity:.38;}
 .pdf-print-frame{position:fixed;width:1px;height:1px;right:0;bottom:0;border:0;opacity:0;pointer-events:none;}
+.pdf-tool{margin-top:24px;padding-top:24px;border-top:1px solid var(--line);}
+.pdf-tool:first-of-type{margin-top:18px;padding-top:0;border-top:0;}
+.pdf-tool h3{margin:0;font-size:1.02rem;color:var(--ink);}
+.pdf-file-list{white-space:pre-line;}
 @media(max-width:720px){.pdf-actions{width:100%;}.pdf-actions button{flex:1;}}
