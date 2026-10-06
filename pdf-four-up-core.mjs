@@ -1,9 +1,11 @@
-import { PDFDocument, degrees } from './vendor/pdf-lib.min.mjs';
+import { PDFDocument, degrees, rgb } from './vendor/pdf-lib.min.mjs';
 
 export const A4_WIDTH = 595.28;
 export const A4_HEIGHT = 841.89;
 const CELL_WIDTH = A4_WIDTH / 2;
 const CELL_HEIGHT = A4_HEIGHT / 2;
+const CUT_GUIDE_COLOR = rgb(0.55, 0.55, 0.55);
+const CUT_GUIDE_THICKNESS = 0.75;
 
 function pageId(fileIndex, pageNumber) {
   return `${fileIndex + 1}:${pageNumber}`;
@@ -38,6 +40,21 @@ function drawOptions(embeddedPage, sourcePage, slot) {
   if (rotation === 180) return { x: left + placedWidth, y: bottom + placedHeight, width, height, rotate: degrees(180) };
   if (rotation === 270) return { x: left, y: bottom + placedHeight, width, height, rotate: degrees(270) };
   return { x: left, y: bottom, width, height };
+}
+
+function drawCutGuides(page) {
+  page.drawLine({
+    start: { x: CELL_WIDTH, y: 0 },
+    end: { x: CELL_WIDTH, y: A4_HEIGHT },
+    thickness: CUT_GUIDE_THICKNESS,
+    color: CUT_GUIDE_COLOR
+  });
+  page.drawLine({
+    start: { x: 0, y: CELL_HEIGHT },
+    end: { x: A4_WIDTH, y: CELL_HEIGHT },
+    thickness: CUT_GUIDE_THICKNESS,
+    color: CUT_GUIDE_COLOR
+  });
 }
 
 export function verifyPlacements(expectedIds, placementIds) {
@@ -102,6 +119,7 @@ export async function createFourUpPdf(inputFiles, progress = () => {}) {
   }
 
   const verification = verifyPlacements(expectedIds, placements.map(item => item.id));
+  output.getPages().forEach(drawCutGuides);
   const bytes = await output.save();
   const reopened = await PDFDocument.load(bytes.slice());
   const outputSheets = Math.ceil(totalInputPages / 4);
