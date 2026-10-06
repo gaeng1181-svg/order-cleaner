@@ -122,7 +122,7 @@
       const invalid = files.find(file => !/\.pdf$/i.test(file.name));
       if (invalid) throw new Error(`${invalid.name}: PDF 파일만 선택할 수 있습니다.`);
       $('pdfFourStatus').textContent = 'PDF 합본 준비 중…';
-      fourCore ||= import('./pdf-four-up-core.mjs').catch(error => { fourCore = null; throw error; });
+      fourCore ||= import('./pdf-four-up-core.mjs?v=cut-guides-1').catch(error => { fourCore = null; throw error; });
       const { createFourUpPdf } = await fourCore;
       const inputs = await Promise.all(files.map(async file => ({ name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) })));
       const result = await createFourUpPdf(inputs, progress => {
@@ -137,7 +137,7 @@
       fourResultName = '쉽먼트_PDF_4분할.pdf';
       $('pdfFourDownload').disabled = false;
       prepareFourPrintFrame();
-      $('pdfFourStatus').textContent = `완료 · A4 ${result.outputSheets}장에 원본 ${result.placedPages}페이지를 배치했습니다.`;
+      $('pdfFourStatus').textContent = `완료 · A4 ${result.outputSheets}장에 원본 ${result.placedPages}페이지와 중앙 재단선을 배치했습니다.`;
     } catch (error) {
       if (current !== fourGeneration) return;
       resetFourResult();
