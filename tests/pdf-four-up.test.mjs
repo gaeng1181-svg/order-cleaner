@@ -49,7 +49,8 @@ async function runCase(caseName, fixtureNames, expectedInputPages, expectedSheet
       expectedIds.push(`${fileIndex + 1}:${pageNumber}`);
       expectedMarkers.push(`${key}-P${pageNumber}`);
     }
-  });  assert.deepEqual(result.placements.map(item => item.id), expectedIds);
+  });
+  assert.deepEqual(result.placements.map(item => item.id), expectedIds);
 
   const outputPath = path.join(tempDir, `${caseName}.pdf`);
   await writeFile(outputPath, result.bytes);
