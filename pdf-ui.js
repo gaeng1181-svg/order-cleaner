@@ -182,8 +182,8 @@
     }
   });
   $('pdfFourSelect').addEventListener('click', () => $('pdfFourInput').click());
-  $('pdfFourInput').addEventListener('change', () => {
-    chooseFourPdfs($('pdfFourInput').files);
+  $('pdfFourInput').addEventListener('change', async () => {
+    await chooseFourPdfs($('pdfFourInput').files);
     $('pdfFourInput').value = '';
   });
   ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(name => {
