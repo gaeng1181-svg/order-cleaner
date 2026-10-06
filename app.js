@@ -91,8 +91,33 @@
     return String(value);
   }
 
-  function cleanAlias(value) {
+  function removeDuplicateOrderQuantityTokens(value, quantityValue) {
+    const quantityText = cellText(quantityValue).replace(/,/g, "").trim();
+    const quantity = Number(quantityText);
+    const exactQuantityToken = quantityText && Number.isInteger(quantity) && quantity >= 0
+      ? new RegExp("^" + quantity + "\\s*개$")
+      : null;
+
     return cellText(value)
+      .split("/")
+      .map((token) => token
+        .replace(/\d[\d,]*\s*원/g, " ")
+        .replace(/\s+/g, " ")
+        .trim())
+      .filter((token) => token && !(exactQuantityToken && exactQuantityToken.test(token)))
+      .join("/");
+  }
+
+  function normalizeGender(value) {
+    return cellText(value)
+      .replace(/남성용|남자|남성/g, "남")
+      .replace(/여성용|여자|여성/g, "여")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function cleanAlias(value, quantityValue) {
+    const cleaned = removeDuplicateOrderQuantityTokens(value, quantityValue)
       // 옵션 입력용 라벨은 실제 별칭으로 가공하는 행에서만 제거합니다.
       .replace(/^\s*선택\s*[:：]\s*/i, "")
       .replace(/^\s*색상\s*[:：]\s*사이즈\s*[:：]\s*/i, "")
@@ -104,10 +129,10 @@
       .replace(/\d[\d,]*\s*원/g, " ")
       .replace(/제품|상품/g, " ")
       .replace(/[\/:]/g, " ")
-      .replace(/\s+\d+\s*개\s*$/g, " ")
       .replace(/[\t\r\n]+/g, " ")
       .replace(/\s+/g, " ")
       .trim();
+    return normalizeGender(cleaned);
   }
 
   function shouldPreserveOriginalAlias(aliasValue) {
@@ -129,10 +154,10 @@
   }
 
   function finalizeAlias(value) {
-    return cellText(value)
+    return normalizeGender(cellText(value)
       .replace(/\(\s*\)/g, " ")
       .replace(/\s+/g, " ")
-      .trim();
+      .trim());
   }
 
   function normalizedSearchText(...values) {
@@ -223,9 +248,9 @@
     return candidates.length ? candidates[candidates.length - 1] : "";
   }
 
-  function onePlusOneAlias(productName, optionText, currentAlias) {
+  function onePlusOneAlias(productName, optionText, currentAlias, quantityValue) {
     if (!/1\s*\+\s*1/.test(`${productName} ${optionText} ${currentAlias}`)) return null;
-    const preserved = stripPrefix(cleanAlias(currentAlias));
+    const preserved = stripPrefix(cleanAlias(currentAlias, quantityValue));
     const markerIndex = preserved.search(/\(\s*1\s*\+\s*1\s*\)/i);
     if (markerIndex >= 0) {
       const existingName = finalizeAlias(preserved.slice(0, markerIndex)).replace(/^\++|\++$/g, "").trim();
@@ -238,7 +263,7 @@
     const compactChoices = choices.map((item) => `${escapeRegExp(item.color)}\\s*${escapeRegExp(item.size)}`).join("|");
     const choicePattern = new RegExp(compactChoices, "gi");
     const source = productMatch ? productMatch[1] : stripPrefix(currentAlias).replace(choicePattern, " ");
-    let base = cleanAlias(source)
+    let base = cleanAlias(source, quantityValue)
       .replace(/1\s*\+\s*1/gi, " ")
       .replace(/구명\s*조끼/gi, " ")
       .replace(/라이프\s*(?:자켓|재킷)/gi, " ")
@@ -294,7 +319,7 @@
       return originalAlias.trim() ? originalAlias : "";
     }
 
-    const cleaned = cleanAlias(sourceAlias);
+    const cleaned = cleanAlias(sourceAlias, quantityValue);
     const search = normalizedSearchText(productValue, optionValue, aliasValue);
     const isLife = hasKeyword(search, LIFE_KEYWORDS);
     const isClothing = !isLife && hasKeyword(search, CLOTHING_KEYWORDS);
@@ -302,7 +327,7 @@
 
     let bare = stripPrefix(cleaned);
     const onePlusOneSource = originalAlias.trim() ? originalAlias : sourceAlias;
-    const special = isLife ? onePlusOneAlias(cellText(productValue), cellText(optionValue), onePlusOneSource) : null;
+    const special = isLife ? onePlusOneAlias(cellText(productValue), cellText(optionValue), onePlusOneSource, quantityValue) : null;
     let body = special || bare;
     if (!body) return "";
 
@@ -318,6 +343,10 @@
       prefix = "5_";
     }
     return finalizeAlias(`${prefix}${body}`);
+  }
+
+  if (globalThis.__ORDER_CLEANER_TEST_MODE__) {
+    globalThis.__ORDER_CLEANER_TEST__ = { buildAlias, cleanAlias, normalizeGender, removeDuplicateOrderQuantityTokens };
   }
 
   function clonePlain(value) {
