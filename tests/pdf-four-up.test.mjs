@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PDFDocument, StandardFonts, rgb } from '../vendor/pdf-lib.min.mjs';
+import { decodePDFRawStream, PDFArray, PDFDocument, PDFRawStream, StandardFonts, rgb } from '../vendor/pdf-lib.min.mjs';
 import { A4_HEIGHT, A4_WIDTH, createFourUpPdf } from '../pdf-four-up-core.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -49,11 +49,21 @@ async function runCase(caseName, fixtureNames, expectedInputPages, expectedSheet
       expectedIds.push(`${fileIndex + 1}:${pageNumber}`);
       expectedMarkers.push(`${key}-P${pageNumber}`);
     }
-  });
-  assert.deepEqual(result.placements.map(item => item.id), expectedIds);
+  });  assert.deepEqual(result.placements.map(item => item.id), expectedIds);
 
   const outputPath = path.join(tempDir, `${caseName}.pdf`);
   await writeFile(outputPath, result.bytes);
+  const reopened = await PDFDocument.load(result.bytes.slice());
+  reopened.getPages().forEach((page, pageIndex) => {
+    const contents = page.node.Contents();
+    assert.ok(contents instanceof PDFArray, `A4 ${pageIndex + 1}의 콘텐츠 스트림을 확인할 수 있어야 합니다.`);
+    const guideRef = contents.get(contents.size() - 1);
+    const guideStream = reopened.context.lookup(guideRef);
+    assert.ok(guideStream instanceof PDFRawStream, `A4 ${pageIndex + 1}에 재단선 스트림이 있어야 합니다.`);
+    const guideOperators = new TextDecoder().decode(decodePDFRawStream(guideStream).decode());
+    assert.match(guideOperators, /297\.64 0 m\s+297\.64 841\.89 l/, `A4 ${pageIndex + 1}에 중앙 세로 재단선이 있어야 합니다.`);
+    assert.match(guideOperators, /0 420\.945 m\s+595\.28 420\.945 l/, `A4 ${pageIndex + 1}에 중앙 가로 재단선이 있어야 합니다.`);
+  });
   const info = execFileSync('pdfinfo', [outputPath], { encoding: 'utf8' });
   assert.match(info, new RegExp(`Pages:\\s+${expectedSheets}\\b`));
   assert.match(info, /Page size:\s+595\.28 x 841\.89 pts \(A4\)/);
