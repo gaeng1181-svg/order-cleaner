@@ -345,8 +345,66 @@
     return finalizeAlias(`${prefix}${body}`);
   }
 
+  function isBlankAliasValue(value) {
+    return value == null || cellText(value).trim() === "";
+  }
+
+  function isNumericOnlyAliasValue(value) {
+    return !isBlankAliasValue(value) && /^\d+$/.test(cellText(value).trim());
+  }
+
+  function meaningfulFallbackText(value) {
+    if (isBlankAliasValue(value) || isNumericOnlyAliasValue(value)) return "";
+    return cellText(value).trim();
+  }
+
+  function resolveFinalAliasValue(currentValue, optionValue, productValue) {
+    if (!isBlankAliasValue(currentValue) && !isNumericOnlyAliasValue(currentValue)) {
+      return currentValue;
+    }
+    const optionFallback = meaningfulFallbackText(optionValue);
+    if (optionFallback) return optionFallback;
+    const productFallback = meaningfulFallbackText(productValue);
+    if (productFallback) return productFallback;
+    return currentValue;
+  }
+
+  function applyFinalAliasesToSource(sourceSheet, targetSheet) {
+    if (sourceSheet.rowCount !== targetSheet.rowCount) {
+      throw new Error("원본과 작업 시트의 행 수가 달라 원본 N열 반영을 중단했습니다.");
+    }
+
+    for (let rowNumber = 2; rowNumber <= targetSheet.rowCount; rowNumber += 1) {
+      const sourceOrderNumber = cellText(sourceSheet.getCell(rowNumber, 1).value).trim();
+      const targetOrderNumber = cellText(targetSheet.getCell(rowNumber, 1).value).trim();
+      if (sourceOrderNumber !== targetOrderNumber) {
+        throw new Error(`${rowNumber}행의 사방넷주문번호가 일치하지 않아 원본 N열 반영을 중단했습니다.`);
+      }
+    }
+
+    for (let rowNumber = 2; rowNumber <= targetSheet.rowCount; rowNumber += 1) {
+      const targetNCell = targetSheet.getCell(rowNumber, 14);
+      const finalValue = resolveFinalAliasValue(
+        targetNCell.value,
+        sourceSheet.getCell(rowNumber, 13).value,
+        sourceSheet.getCell(rowNumber, 12).value
+      );
+      targetNCell.value = finalValue;
+      sourceSheet.getCell(rowNumber, 14).value = finalValue;
+    }
+  }
+
   if (globalThis.__ORDER_CLEANER_TEST_MODE__) {
-    globalThis.__ORDER_CLEANER_TEST__ = { buildAlias, cleanAlias, normalizeGender, removeDuplicateOrderQuantityTokens };
+    globalThis.__ORDER_CLEANER_TEST__ = {
+      buildAlias,
+      cleanAlias,
+      normalizeGender,
+      removeDuplicateOrderQuantityTokens,
+      isBlankAliasValue,
+      isNumericOnlyAliasValue,
+      resolveFinalAliasValue,
+      applyFinalAliasesToSource
+    };
   }
 
   function clonePlain(value) {
@@ -438,10 +496,15 @@
       workbook.calcProperties.fullCalcOnLoad = true;
       await workbook.xlsx.load(await selectedFile.arrayBuffer());
       if (!workbook.worksheets.length) throw new Error("처리할 시트가 없습니다.");
-      if (workbook.getWorksheet("작업")) throw new Error("이미 ‘작업’ 시트가 있습니다. 데이터 보호를 위해 덮어쓰지 않았습니다. 기존 시트 이름을 바꾼 뒤 다시 실행해 주세요.");
-
-      const sourceSheet = workbook.worksheets[0];
+      const sourceCandidates = workbook.worksheets.filter((sheet) => sheet.name !== "작업");
+      if (sourceCandidates.length !== 1) {
+        throw new Error("원본 시트를 안전하게 식별할 수 없어 처리를 중단했습니다. ‘작업’ 시트를 제외한 원본 시트가 하나인지 확인해 주세요.");
+      }
+      const sourceSheet = sourceCandidates[0];
       if (sourceSheet.columnCount < 17) throw new Error("필요한 L·M·N·Q열을 찾을 수 없습니다. 주문서 출력양식 파일인지 확인해 주세요.");
+
+      const existingWorkSheet = workbook.getWorksheet("작업");
+      if (existingWorkSheet) workbook.removeWorksheet(existingWorkSheet.id);
 
       // 원본은 데이터/행 순서를 유지하고, 요청한 예외인 N1 공란 + 필터만 적용합니다.
       sourceSheet.getCell("N1").value = null;
@@ -452,6 +515,7 @@
       await allowScreenUpdate();
       const targetSheet = workbook.addWorksheet("작업");
       copyWorkbookSheet(sourceSheet, targetSheet);
+      applyFinalAliasesToSource(sourceSheet, targetSheet);
       setStatus("processing", "처리 중 · 결과 엑셀을 저장하고 있습니다…");
       await allowScreenUpdate();
       const buffer = await workbook.xlsx.writeBuffer();
