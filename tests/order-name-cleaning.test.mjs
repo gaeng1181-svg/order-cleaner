@@ -50,7 +50,15 @@ const context = {
 context.window = context;
 vm.runInNewContext(fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8'), context, { filename: 'app.js' });
 
-const { buildAlias, cleanAlias, normalizeGender, removeDuplicateOrderQuantityTokens } = context.__ORDER_CLEANER_TEST__;
+const {
+  buildAlias,
+  cleanAlias,
+  finalizeAlias,
+  normalizeGender,
+  removeDuplicateOrderQuantityTokens,
+  isNumericOnlyAliasValue,
+  resolveFinalAliasValue
+} = context.__ORDER_CLEANER_TEST__;
 
 const quantityCases = [
   ['50개:1세트/0원/2개', 2, '50개:1세트'],
@@ -99,4 +107,38 @@ assert.equal(buildAlias('버팔로 구명조끼 1+1', '', '정품(1+1) 레드XL+
 assert.equal(buildAlias('래쉬가드', '', '블랙 XL', 1), '2_블랙 XL');
 assert.equal(buildAlias('국내산 농산물', '', '감자 3kg', 1), '5_감자 3kg');
 
-console.log(`order name cleaning: ${quantityCases.length + genderCases.length + 6} cases passed`);
+// numeric-only N은 무효 후보이며 M/L fallback 뒤에도 동일한 최종 정리를 적용합니다.
+assert.equal(isNumericOnlyAliasValue('273'), true);
+assert.equal(isNumericOnlyAliasValue('00027'), true);
+for (const valid of ['1_블랙라벨 M', '2P', '1+1', '30cmx8개', '2200mm 2P', 'L-XL', '2XL']) {
+  assert.equal(isNumericOnlyAliasValue(valid), false, `${valid} must remain meaningful`);
+}
+assert.equal(
+  buildAlias('BUCK703 접이식 캠핑화로대', '색상:접이식 캠핑화로대 420x420', '273', 1, '1011030666918'),
+  '접이식 캠핑화로대 420x420'
+);
+assert.equal(resolveFinalAliasValue('273', '색상:옵션D', '상품D'), '옵션D');
+assert.equal(resolveFinalAliasValue('', '', '상품C'), '상품C');
+
+// 모든 N 생성 경로에 적용되는 공통 cleanup입니다.
+assert.equal(finalizeAlias('색상:사이즈:그레이(남성용):2XL'), '그레이(남) 2XL');
+assert.equal(finalizeAlias('1_접이식 +(1+1)   블랙XL+그레이L'), '1_접이식(1+1) 블랙XL+그레이L');
+for (const value of ['블랙XL+그레이L', '레드L+블랙XL', '1+1', '2+1']) {
+  assert.equal(finalizeAlias(value), value, `${value} plus must be preserved`);
+}
+
+const tiesoProduct = '[BUCK703]땡가격 SALE 국내생산 티에소 사각드로즈 팬티(남녀) 여성사각팬티 남자사각팬티 드로즈팬티';
+assert.equal(
+  buildAlias(tiesoProduct, '색상:사이즈:그레이(남성용):2XL', '273', 2, '1011030533709'),
+  '티에소 사각드로즈 그레이(남) 2XL'
+);
+assert.equal(
+  buildAlias(tiesoProduct, '색상:사이즈:블랙(남성용):2XL', '273', 3, '1011030533709'),
+  '티에소 사각드로즈 블랙(남) 2XL'
+);
+assert.notEqual(
+  buildAlias('다른 사각드로즈 상품', '색상:사이즈:블랙(남성용):2XL', '273', 1, '999'),
+  '티에소 사각드로즈 블랙(남) 2XL'
+);
+
+console.log('order name cleaning: requested cases and regressions passed');
