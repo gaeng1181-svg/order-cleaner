@@ -14,10 +14,12 @@
   const dropZone = document.getElementById("dropZone");
   const fileName = document.getElementById("fileName");
   const fileDetail = document.getElementById("fileDetail");
+  const orderClear = document.getElementById("orderClear");
   const status = document.getElementById("status");
   const statusText = document.getElementById("statusText");
   const errorBox = document.getElementById("errorBox");
   let selectedFile = null;
+  let orderGeneration = 0;
 
   const LIFE_KEYWORDS = ["구명조끼", "구명 조끼", "라이프자켓", "라이프 자켓", "라이프재킷", "라이프 재킷", "부력조끼", "부력 조끼"];
   const CLOTHING_KEYWORDS = [
@@ -38,6 +40,12 @@
     "재배망", "재배 망", "지지대", "화분", "모종삽", "삽", "감자칼", "필러", "씨앗", "종자", "비료", "농약"
   ];
   const SIZE_ORDER = new Map([["FREE", 0], ["XS", 1], ["S", 2], ["M", 3], ["L", 4], ["XL", 5]]);
+  const PRODUCT_ALIAS_EXCEPTIONS = new Map([
+    ["1011030533709", {
+      productTerms: ["티에소", "사각드로즈"],
+      baseName: "티에소 사각드로즈"
+    }]
+  ]);
 
   function setError(message) {
     errorBox.textContent = message;
@@ -53,23 +61,38 @@
     return new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 20)));
   }
 
-  function chooseFile(file) {
+  function resetOrderFile() {
+    orderGeneration += 1;
+    selectedFile = null;
+    fileInput.value = "";
+    fileName.textContent = "정리할 엑셀 파일을 선택하세요";
+    fileDetail.textContent = ".xlsx · 기존 v1.7 규칙 유지";
+    orderClear.hidden = true;
+    runButton.disabled = true;
+    selectButton.disabled = false;
+    dropZone.classList.remove("is-dragging");
     setError("");
+    setStatus("ready", "파일을 선택하면 실행할 수 있습니다.");
+  }
+
+  function chooseFile(file) {
+    resetOrderFile();
     if (!file) return;
     if (!/\.xlsx$/i.test(file.name)) {
-      selectedFile = null;
-      runButton.disabled = true;
       setError(".xlsx 형식의 엑셀 파일만 선택할 수 있습니다.");
+      setStatus("error", "오류 · 올바른 엑셀 파일을 선택해 주세요.");
       return;
     }
     selectedFile = file;
     fileName.textContent = file.name;
     fileDetail.textContent = `${(file.size / 1024 / 1024).toFixed(1)} MB · 준비 완료`;
+    orderClear.hidden = false;
     setStatus("ready", "주문서 정리를 실행할 수 있습니다.");
     runButton.disabled = false;
   }
 
   selectButton.addEventListener("click", () => fileInput.click());
+  orderClear.addEventListener("click", resetOrderFile);
   fileInput.addEventListener("change", () => chooseFile(fileInput.files[0]));
   ["dragenter", "dragover"].forEach((name) => dropZone.addEventListener(name, (event) => {
     event.preventDefault();
@@ -116,6 +139,18 @@
       .trim();
   }
 
+  function finalizeAlias(value) {
+    return normalizeGender(cellText(value)
+      .replace(/(?:색상|사이즈)\s*[:：]\s*/gi, "")
+      .replace(/\s+\+\s*(?=\(\s*1\s*\+\s*1\s*\))/gi, "")
+      .replace(/[:：]+/g, " ")
+      .replace(/\(\s*\)/g, " ")
+      .replace(/\s+([)])/g, "$1")
+      .replace(/([(])\s+/g, "$1")
+      .replace(/\s+/g, " ")
+      .trim());
+  }
+
   function cleanAlias(value, quantityValue) {
     const cleaned = removeDuplicateOrderQuantityTokens(value, quantityValue)
       // 옵션 입력용 라벨은 실제 별칭으로 가공하는 행에서만 제거합니다.
@@ -140,7 +175,7 @@
     if (!original) return false;
 
     // 예: "색상:사이즈:모던블랙:110"처럼 상품명 없이 옵션 라벨과
-    // 옵션값만 들어 있는 N은 상품명을 추측하지 않고 원문 그대로 둡니다.
+    // 옵션값만 들어 있는 N은 상품명을 추측하지 않고 공통 final cleanup 후 사용합니다.
     const startsWithOptionLabels = /^\s*색상\s*[:：]\s*사이즈\s*[:：]/i.test(original);
     if (!startsWithOptionLabels) return false;
 
@@ -151,13 +186,6 @@
       isAgricultureProduct("", "", original);
 
     return !hasKnownProductSignal;
-  }
-
-  function finalizeAlias(value) {
-    return normalizeGender(cellText(value)
-      .replace(/\(\s*\)/g, " ")
-      .replace(/\s+/g, " ")
-      .trim());
   }
 
   function normalizedSearchText(...values) {
@@ -276,11 +304,20 @@
   }
 
   function firstAliasSource(productValue, optionValue, aliasValue) {
-    const alias = cellText(aliasValue).trim();
+    const alias = meaningfulFallbackText(aliasValue);
     if (alias) return alias;
-    const option = cellText(optionValue).trim();
+    const option = meaningfulFallbackText(optionValue);
     if (option) return option;
-    return cellText(productValue).trim();
+    return meaningfulFallbackText(productValue);
+  }
+
+  function applyProductAliasException(productNumberValue, productValue, optionValue, quantityValue) {
+    const rule = PRODUCT_ALIAS_EXCEPTIONS.get(cellText(productNumberValue).trim());
+    if (!rule) return "";
+    const productText = cellText(productValue);
+    if (!rule.productTerms.every((term) => productText.includes(term))) return "";
+    const option = cleanAlias(optionValue, quantityValue);
+    return finalizeAlias(`${rule.baseName} ${option}`);
   }
 
   function isAgricultureProduct(productValue, optionValue, aliasValue) {
@@ -304,19 +341,27 @@
     return `${withoutTag.replace(/_이염$/g, "")}_이염`;
   }
 
-  function buildAlias(productValue, optionValue, aliasValue, quantityValue) {
+  function buildAlias(productValue, optionValue, aliasValue, quantityValue, productNumberValue) {
     const originalAlias = cellText(aliasValue);
+
+    const exceptionAlias = applyProductAliasException(
+      productNumberValue,
+      productValue,
+      optionValue,
+      quantityValue
+    );
+    if (exceptionAlias) return exceptionAlias;
 
     // N에 이미 값이 있어도 상품명 없는 옵션 전용 문자열이면 손대지 않습니다.
     // L열을 보고 임의의 내부 별칭을 추측하거나 1_/2_/4_/5_를 붙이지 않습니다.
-    if (shouldPreserveOriginalAlias(originalAlias)) return originalAlias;
+    if (shouldPreserveOriginalAlias(originalAlias)) return finalizeAlias(originalAlias);
 
     const sourceAlias = firstAliasSource(productValue, optionValue, aliasValue);
 
     // N이 비어 M을 fallback으로 쓰는 경우에도 M이 "색상:사이즈:..." 같은 옵션 전용 값이면
-    // 상품명을 추측해 새 별칭을 만들지 않습니다. N이 원래 있으면 원문 유지, 없으면 공란 유지합니다.
+    // 상품명을 추측해 새 별칭을 만들지 않습니다. N이 원래 있으면 공통 final cleanup 후 사용하고, 없으면 공란을 유지합니다.
     if (isOptionOnlyText(sourceAlias)) {
-      return originalAlias.trim() ? originalAlias : "";
+      return finalizeAlias(sourceAlias);
     }
 
     const cleaned = cleanAlias(sourceAlias, quantityValue);
@@ -359,14 +404,10 @@
   }
 
   function resolveFinalAliasValue(currentValue, optionValue, productValue) {
-    if (!isBlankAliasValue(currentValue) && !isNumericOnlyAliasValue(currentValue)) {
-      return currentValue;
-    }
+    const current = meaningfulFallbackText(currentValue);
     const optionFallback = meaningfulFallbackText(optionValue);
-    if (optionFallback) return optionFallback;
     const productFallback = meaningfulFallbackText(productValue);
-    if (productFallback) return productFallback;
-    return currentValue;
+    return finalizeAlias(current || optionFallback || productFallback);
   }
 
   function applyFinalAliasesToSource(sourceSheet, targetSheet) {
@@ -399,11 +440,17 @@
       buildAlias,
       cleanAlias,
       normalizeGender,
+      finalizeAlias,
       removeDuplicateOrderQuantityTokens,
+      applyProductAliasException,
       isBlankAliasValue,
       isNumericOnlyAliasValue,
       resolveFinalAliasValue,
-      applyFinalAliasesToSource
+      applyFinalAliasesToSource,
+      processOrderWorkbook,
+      chooseFile,
+      resetOrderFile,
+      getSelectedFileName: () => selectedFile ? selectedFile.name : ""
     };
   }
 
@@ -437,7 +484,7 @@
     const rowValues = sourceRows.map((sourceRow, index) => {
       const values = sourceRow.values.slice();
       if (index > 0) {
-        values[14] = buildAlias(values[12], values[13], values[14], values[17]);
+        values[14] = buildAlias(values[12], values[13], values[14], values[17], values[23]);
       }
       return values;
     });
@@ -482,8 +529,33 @@
     return `${name.replace(/\.xlsx$/i, "")}_정리.xlsx`;
   }
 
+  function processOrderWorkbook(workbook) {
+    if (!workbook.worksheets.length) throw new Error("처리할 시트가 없습니다.");
+    const sourceCandidates = workbook.worksheets.filter((sheet) => sheet.name !== "작업");
+    if (sourceCandidates.length !== 1) {
+      throw new Error("원본 시트를 안전하게 식별할 수 없어 처리를 중단했습니다. ‘작업’ 시트를 제외한 원본 시트가 하나인지 확인해 주세요.");
+    }
+    const sourceSheet = sourceCandidates[0];
+    if (sourceSheet.columnCount < 17) throw new Error("필요한 L·M·N·Q열을 찾을 수 없습니다. 주문서 출력양식 파일인지 확인해 주세요.");
+    if (workbook.getWorksheet("작업")) {
+      throw new Error("이미 ‘작업’ 시트가 있습니다. 데이터 보호를 위해 덮어쓰지 않았습니다.");
+    }
+
+    // 원본은 데이터/행 순서를 유지하고, 요청한 예외인 N1 공란 + 필터만 적용합니다.
+    sourceSheet.getCell("N1").value = null;
+    const sourceLastRow = Math.max(1, sourceSheet.rowCount);
+    const sourceLastColumnLetter = sourceSheet.getColumn(Math.max(1, sourceSheet.columnCount)).letter;
+    sourceSheet.autoFilter = { from: "A1", to: `${sourceLastColumnLetter}${sourceLastRow}` };
+    const targetSheet = workbook.addWorksheet("작업");
+    copyWorkbookSheet(sourceSheet, targetSheet);
+    applyFinalAliasesToSource(sourceSheet, targetSheet);
+    return { sourceSheet, targetSheet };
+  }
+
   async function run() {
     if (!selectedFile || runButton.disabled) return;
+    const currentFile = selectedFile;
+    const currentGeneration = orderGeneration;
     setError("");
     runButton.disabled = true;
     selectButton.disabled = true;
@@ -494,47 +566,31 @@
       if (typeof ExcelJS === "undefined") throw new Error("엑셀 처리 구성요소를 불러오지 못했습니다. 프로그램 폴더 안의 파일을 함께 보관해 주세요.");
       const workbook = new ExcelJS.Workbook();
       workbook.calcProperties.fullCalcOnLoad = true;
-      await workbook.xlsx.load(await selectedFile.arrayBuffer());
-      if (!workbook.worksheets.length) throw new Error("처리할 시트가 없습니다.");
-      const sourceCandidates = workbook.worksheets.filter((sheet) => sheet.name !== "작업");
-      if (sourceCandidates.length !== 1) {
-        throw new Error("원본 시트를 안전하게 식별할 수 없어 처리를 중단했습니다. ‘작업’ 시트를 제외한 원본 시트가 하나인지 확인해 주세요.");
-      }
-      const sourceSheet = sourceCandidates[0];
-      if (sourceSheet.columnCount < 17) throw new Error("필요한 L·M·N·Q열을 찾을 수 없습니다. 주문서 출력양식 파일인지 확인해 주세요.");
-
-      const existingWorkSheet = workbook.getWorksheet("작업");
-      if (existingWorkSheet) workbook.removeWorksheet(existingWorkSheet.id);
-
-      // 원본은 데이터/행 순서를 유지하고, 요청한 예외인 N1 공란 + 필터만 적용합니다.
-      sourceSheet.getCell("N1").value = null;
-      const sourceLastRow = Math.max(1, sourceSheet.rowCount);
-      const sourceLastColumnLetter = sourceSheet.getColumn(Math.max(1, sourceSheet.columnCount)).letter;
-      sourceSheet.autoFilter = { from: "A1", to: `${sourceLastColumnLetter}${sourceLastRow}` };
+      await workbook.xlsx.load(await currentFile.arrayBuffer());
+      if (currentGeneration !== orderGeneration || selectedFile !== currentFile) return;
       setStatus("processing", "처리 중 · ‘작업’ 시트를 만들고 정리하고 있습니다…");
       await allowScreenUpdate();
-      const targetSheet = workbook.addWorksheet("작업");
-      copyWorkbookSheet(sourceSheet, targetSheet);
-      applyFinalAliasesToSource(sourceSheet, targetSheet);
+      processOrderWorkbook(workbook);
       setStatus("processing", "처리 중 · 결과 엑셀을 저장하고 있습니다…");
       await allowScreenUpdate();
       const buffer = await workbook.xlsx.writeBuffer();
+      if (currentGeneration !== orderGeneration || selectedFile !== currentFile) return;
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = safeDownloadName(selectedFile.name);
+      anchor.download = safeDownloadName(currentFile.name);
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
       setTimeout(() => URL.revokeObjectURL(url), 60000);
-      setStatus("complete", `완료 · ${safeDownloadName(selectedFile.name)} 파일을 다운로드했습니다.`);
+      setStatus("complete", `완료 · ${safeDownloadName(currentFile.name)} 파일을 다운로드했습니다.`);
     } catch (error) {
       console.error(error);
       setError(error instanceof Error ? error.message : "파일 처리 중 문제가 발생했습니다.");
       setStatus("error", "오류 · 처리하지 못했습니다. 아래 안내를 확인해 주세요.");
     } finally {
-      runButton.disabled = false;
+      runButton.disabled = !selectedFile;
       selectButton.disabled = false;
     }
   }
@@ -548,6 +604,8 @@
   const $ = (id) => document.getElementById(id);
   const download = (blob, name) => { const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),60000); };
   const text = (v) => v == null ? "" : (typeof v === "object" && v.text != null ? String(v.text) : String(v)).trim();
+  const showSelectedFile = (stateId, nameId, fileName) => { $(nameId).textContent=fileName;$(stateId).hidden=false; };
+  const hideSelectedFile = (stateId, nameId) => { $(nameId).textContent='';$(stateId).hidden=true; };
 
   function compareNumericText(a,b){
     const left=text(a),right=text(b);
@@ -594,15 +652,29 @@
 
   // ---------- PO CSV ----------
   let poFile=null;
+  let poGeneration=0;
+  function clearPoFile(){
+    poGeneration++;
+    poFile=null;
+    $('poInput').value='';
+    $('poName').textContent='PO_SKU_LIST CSV를 선택하거나 여기에 드랍하세요';
+    $('poClear').hidden=true;
+    $('poStatus').textContent='파일을 선택하세요.';
+    $('poRun').disabled=true;
+    $('poDropZone').classList.remove('is-dragging');
+  }
   function setPoFile(file){
+    clearPoFile();
     if(!file)return;
     if(!/\.csv$/i.test(file.name)){ $('poStatus').textContent='오류 · CSV 파일만 사용할 수 있습니다.'; return; }
     poFile=file;
     $('poName').textContent=file.name;
+    $('poClear').hidden=false;
     $('poStatus').textContent='준비 완료 · 발주서 생성을 눌러주세요.';
     $('poRun').disabled=false;
   }
   $('poInput').onchange=()=>setPoFile($('poInput').files[0]);
+  $('poClear').onclick=clearPoFile;
   const poDrop=$('poDropZone');
   ['dragenter','dragover'].forEach(name=>poDrop.addEventListener(name,e=>{e.preventDefault();e.stopPropagation();poDrop.classList.add('is-dragging');}));
   ['dragleave','drop'].forEach(name=>poDrop.addEventListener(name,e=>{e.preventDefault();e.stopPropagation();poDrop.classList.remove('is-dragging');}));
@@ -614,9 +686,9 @@
     if(field||row.length){row.push(field.replace(/\r$/,''));rows.push(row);} return rows;
   }
   $('poRun').onclick=async()=>{
-    if(!poFile)return; $('poRun').disabled=true;$('poStatus').textContent='처리 중…';
+    if(!poFile)return; const currentFile=poFile,currentGeneration=poGeneration;$('poRun').disabled=true;$('poStatus').textContent='처리 중…';
     try{
-      const rows=parseCSV(await poFile.text()); if(rows.length<2)throw new Error('CSV 데이터가 없습니다.');
+      const rows=parseCSV(await currentFile.text());if(currentGeneration!==poGeneration||poFile!==currentFile)return;if(rows.length<2)throw new Error('CSV 데이터가 없습니다.');
       const h=rows[0], idx=(n)=>h.indexOf(n); const req=['발주번호','SKU ID','SKU 이름','SKU Barcode','물류센터','확정수량','매입가'];
       for(const n of req) if(idx(n)<0) throw new Error(`필수 열 '${n}'을 찾을 수 없습니다.`);
       const data=[]; rows.slice(1).forEach((r,sourceIndex)=>{const center=text(r[idx('물류센터')]),qty=Number(String(r[idx('확정수량')]).replace(/,/g,''));if(!center||!qty)return;data.push({center,po:Number(r[idx('발주번호')]),sku:text(r[idx('SKU ID')]),name:cleanCoupangPoName(r[idx('SKU 이름')]),qty,price:Number(String(r[idx('매입가')]).replace(/,/g,''))||0,barcode:text(r[idx('SKU Barcode')]),sourceIndex});});
@@ -627,26 +699,41 @@
       // 쿠팡 발주정리 출력물은 전체 셀 16pt. 섹션 제목의 빨강/굵게 속성은 유지한다.
       ws.eachRow({includeEmpty:true}, row=>row.eachCell({includeEmpty:true}, cell=>{cell.font={...cell.font,size:16};}));
       ws.getColumn(2).numFmt='0'; ws.views=[{state:'frozen',ySplit:1}]; ws.autoFilter={from:'A1',to:`H${ws.rowCount}`};
-      const buf=await wb.xlsx.writeBuffer();download(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),poFile.name.replace(/\.csv$/i,'')+'_발주정리.xlsx');
+      const buf=await wb.xlsx.writeBuffer();if(currentGeneration!==poGeneration||poFile!==currentFile)return;download(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),currentFile.name.replace(/\.csv$/i,'')+'_발주정리.xlsx');
       $('poStatus').textContent=`완료 · ${data.length}개 SKU / ${poSets.size}개 센터`;
-    }catch(e){$('poStatus').textContent='오류 · '+e.message;}finally{$('poRun').disabled=false;}
+    }catch(e){if(currentGeneration===poGeneration)$('poStatus').textContent='오류 · '+e.message;}finally{$('poRun').disabled=!poFile;}
   };
 
   // ---------- Address book ----------
   const ADDR_KEY='orderCleaner.coupangAddresses.v2';
   function loadAddresses(){try{const v=JSON.parse(localStorage.getItem(ADDR_KEY)||'null');if(Array.isArray(v))return v;}catch(_){}return (window.DEFAULT_COUPANG_ADDRESSES||[]).map(x=>({...x}));}
   let addresses=loadAddresses(); const saveAddresses=()=>localStorage.setItem(ADDR_KEY,JSON.stringify(addresses));
+  let addrFile=null,addrGeneration=0;
+  function clearAddrFile(){addrGeneration++;addrFile=null;$('addrInput').value='';hideSelectedFile('addrFileState','addrName');}
   function renderAddresses(){const tb=$('addrTable').querySelector('tbody');tb.innerHTML='';addresses.slice().sort((a,b)=>a.center.localeCompare(b.center,'ko')).forEach(a=>{const tr=document.createElement('tr');tr.innerHTML=`<td>${esc(a.center)}</td><td>${esc(a.phone)}</td><td class="wrap">${esc(a.address)}</td><td><button class="mini danger">삭제</button></td>`;tr.querySelector('button').onclick=()=>{if(confirm(`${a.center} 주소를 삭제할까요?`)){addresses=addresses.filter(x=>x.center!==a.center);saveAddresses();renderAddresses();}};tb.appendChild(tr);});}
   function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
   $('addrAdd').onclick=()=>{const center=$('addrCenter').value.trim(),phone=$('addrPhone').value.trim(),address=$('addrAddress').value.trim();if(!center||!address)return alert('센터명과 주소를 입력해주세요.');const old=addresses.find(x=>x.center===center);if(old){old.phone=phone;old.address=address;}else addresses.push({center,phone,address});saveAddresses();$('addrCenter').value=$('addrPhone').value=$('addrAddress').value='';renderAddresses();};
   $('addrUpload').onclick=()=>$('addrInput').click();
-  $('addrInput').onchange=async()=>{const f=$('addrInput').files[0];if(!f)return;try{const wb=new ExcelJS.Workbook();await wb.xlsx.load(await f.arrayBuffer());const ws=wb.getWorksheet('주소')||wb.worksheets[0];const arr=[];ws.eachRow((r,n)=>{if(n===1)return;const center=text(r.getCell(2).value),phone=text(r.getCell(3).value),address=text(r.getCell(6).value);if(center)arr.push({center,phone,address});});if(!arr.length)throw new Error('주소 데이터를 찾지 못했습니다.');addresses=arr;saveAddresses();renderAddresses();alert(`${arr.length}개 센터 주소를 등록했습니다.`);}catch(e){alert('주소 업로드 오류: '+e.message);}finally{$('addrInput').value='';}};
+  $('addrClear').onclick=clearAddrFile;
+  $('addrInput').onchange=async()=>{const f=$('addrInput').files[0];clearAddrFile();if(!f)return;addrFile=f;const currentGeneration=addrGeneration;showSelectedFile('addrFileState','addrName',f.name);try{const wb=new ExcelJS.Workbook();await wb.xlsx.load(await f.arrayBuffer());if(currentGeneration!==addrGeneration||addrFile!==f)return;const ws=wb.getWorksheet('주소')||wb.worksheets[0];const arr=[];ws.eachRow((r,n)=>{if(n===1)return;const center=text(r.getCell(2).value),phone=text(r.getCell(3).value),address=text(r.getCell(6).value);if(center)arr.push({center,phone,address});});if(!arr.length)throw new Error('주소 데이터를 찾지 못했습니다.');addresses=arr;saveAddresses();renderAddresses();alert(`${arr.length}개 센터 주소를 등록했습니다.`);}catch(e){if(currentGeneration===addrGeneration)alert('주소 업로드 오류: '+e.message);}};
   $('addrDownload').onclick=async()=>{const wb=new ExcelJS.Workbook(),ws=wb.addWorksheet('주소');ws.addRow(['','수령자','수령자전화번호','수령자휴대폰번호','우편번호','주소','배송방법','쇼핑몰']);addresses.slice().sort((a,b)=>a.center.localeCompare(b.center,'ko')).forEach(a=>ws.addRow(['',a.center,a.phone,'','',a.address,'신용','쿠팡로켓']));const buf=await wb.xlsx.writeBuffer();download(new Blob([buf]),'쿠팡로켓주소_백업.xlsx');};
   $('addrReset').onclick=()=>{if(confirm('현재 주소록을 기본 주소 48개로 되돌릴까요?')){addresses=(window.DEFAULT_COUPANG_ADDRESSES||[]).map(x=>({...x}));saveAddresses();renderAddresses();}};
 
   // ---------- Shipment split ----------
-  let shipmentRows=[];
+  let shipmentRows=[],shipFile=null,shipGeneration=0;
+  function clearShipmentFile(){
+    shipGeneration++;
+    shipFile=null;
+    shipmentRows=[];
+    $('shipInput').value='';
+    hideSelectedFile('shipFileState','shipName');
+    $('shipSummary').textContent='';
+    $('shipTable').querySelector('tbody').innerHTML='';
+    $('shipSave').disabled=true;
+    $('addressExport').disabled=true;
+  }
   $('shipSelect').onclick=()=>$('shipInput').click();
+  $('shipClear').onclick=clearShipmentFile;
   function shipmentColumns(ws){
     const headers=new Map();
     ws.getRow(1).eachCell({includeEmpty:true},(cell,column)=>{const header=text(cell.value).replace(/^\uFEFF/,'').trim();if(header&&!headers.has(header))headers.set(header,column);});
@@ -656,7 +743,7 @@
     return {center:headers.get('물류센터'),po:headers.get('발주번호'),sku:headers.get('SKU ID')||0,name:headers.get('SKU 이름'),qty:headers.get('확정수량'),box:headers.get('SKU Barcode')};
   }
   function positiveNumber(value){const number=Number(text(value).replace(/,/g,''));return Number.isFinite(number)&&number>0?number:0;}
-  $('shipInput').onchange=async()=>{const f=$('shipInput').files[0];if(!f)return;try{const wb=new ExcelJS.Workbook();await wb.xlsx.load(await f.arrayBuffer());const ws=wb.getWorksheet('발주정리')||wb.worksheets[0];const columns=shipmentColumns(ws),arr=[];for(let r=2;r<=ws.rowCount;r++){const center=text(ws.getCell(r,columns.center).value),po=text(ws.getCell(r,columns.po).value),name=text(ws.getCell(r,columns.name).value);if(!center&&!po)continue;const qty=positiveNumber(ws.getCell(r,columns.qty).value),boxText=text(ws.getCell(r,columns.box).value);if(!center||!po||!name||!qty)throw new Error(`${r}행의 센터, 발주번호, SKU명 또는 수량을 확인해주세요.`);if(boxText&&(!/^\d+$/.test(boxText)||Number(boxText)<=0))throw new Error(`${r}행의 박스번호를 확인해주세요.`);const box=boxText?String(Number(boxText)):'';arr.push({center,po,sku:columns.sku?text(ws.getCell(r,columns.sku).value):'',name,qty,barcode:box,sourceIndex:r,splits:[box?{box,qty:String(qty)}:{box:'',qty:''}]});}if(!arr.length)throw new Error('발주 상품행을 찾지 못했습니다.');sortCoupangRows(arr);shipmentRows=arr;renderShipment();$('shipSave').disabled=false;$('addressExport').disabled=false;}catch(e){alert('불러오기 오류: '+e.message);}finally{$('shipInput').value='';}};
+  $('shipInput').onchange=async()=>{const f=$('shipInput').files[0];clearShipmentFile();if(!f)return;shipFile=f;const currentGeneration=shipGeneration;showSelectedFile('shipFileState','shipName',f.name);try{const wb=new ExcelJS.Workbook();await wb.xlsx.load(await f.arrayBuffer());if(currentGeneration!==shipGeneration||shipFile!==f)return;const ws=wb.getWorksheet('발주정리')||wb.worksheets[0];const columns=shipmentColumns(ws),arr=[];for(let r=2;r<=ws.rowCount;r++){const center=text(ws.getCell(r,columns.center).value),po=text(ws.getCell(r,columns.po).value),name=text(ws.getCell(r,columns.name).value);if(!center&&!po)continue;const qty=positiveNumber(ws.getCell(r,columns.qty).value),boxText=text(ws.getCell(r,columns.box).value);if(!center||!po||!name||!qty)throw new Error(`${r}행의 센터, 발주번호, SKU명 또는 수량을 확인해주세요.`);if(boxText&&(!/^\d+$/.test(boxText)||Number(boxText)<=0))throw new Error(`${r}행의 박스번호를 확인해주세요.`);const box=boxText?String(Number(boxText)):'';arr.push({center,po,sku:columns.sku?text(ws.getCell(r,columns.sku).value):'',name,qty,barcode:box,sourceIndex:r,splits:[box?{box,qty:String(qty)}:{box:'',qty:''}]});}if(!arr.length)throw new Error('발주 상품행을 찾지 못했습니다.');sortCoupangRows(arr);shipmentRows=arr;renderShipment();$('shipSave').disabled=false;$('addressExport').disabled=false;}catch(e){if(currentGeneration===shipGeneration)alert('불러오기 오류: '+e.message);}};
   function renderShipment(){const tb=$('shipTable').querySelector('tbody');tb.innerHTML='';let total=0,done=0,lastCenter='',groupIndex=-1;shipmentRows.forEach((item,i)=>{if(item.center!==lastCenter){lastCenter=item.center;groupIndex++;}const groupClass=groupIndex%2===0?'group-alt':'';item.splits.forEach((sp,j)=>{const tr=document.createElement('tr');if(groupClass)tr.classList.add(groupClass);if(j===0){tr.innerHTML=`<td>${esc(item.center)}</td><td>${esc(item.po)}</td><td>${esc(item.sku)}</td><td class="wrap">${esc(item.name)}</td><td>${esc(item.barcode)}</td><td>${item.qty}</td>`;}else tr.innerHTML='<td></td><td></td><td></td><td class="wrap">↳ 박스 분할</td><td></td><td></td>';const tdBox=document.createElement('td'),ib=document.createElement('input');ib.type='number';ib.min='1';ib.value=sp.box;ib.oninput=()=>{sp.box=ib.value;updateShipSummary();};tdBox.appendChild(ib);const tdQty=document.createElement('td'),iq=document.createElement('input');iq.type='number';iq.min='0';iq.value=sp.qty;iq.oninput=()=>{sp.qty=iq.value;updateShipSummary();};tdQty.appendChild(iq);const act=document.createElement('td'),btn=document.createElement('button');btn.className='mini';btn.textContent=j===0?'+ 분할':'삭제';btn.onclick=()=>{if(j===0)item.splits.push({box:'',qty:''});else item.splits.splice(j,1);renderShipment();};act.appendChild(btn);tr.append(tdBox,tdQty,act);tb.appendChild(tr);});total++;if(splitSum(item)===item.qty&&item.splits.every(s=>s.box&&Number(s.qty)>0))done++;});$('shipSummary').textContent=`상품 ${total}건 · 수량/박스 입력 완료 ${done}건`;}
   const splitSum=(item)=>item.splits.reduce((s,x)=>s+(Number(x.qty)||0),0);
   function updateShipSummary(){let done=0;shipmentRows.forEach(i=>{if(splitSum(i)===i.qty&&i.splits.every(s=>s.box&&Number(s.qty)>0))done++;});$('shipSummary').innerHTML=`상품 ${shipmentRows.length}건 · 완료 ${done}건`+(done<shipmentRows.length?' <span class="warn">(수량 합계 또는 박스번호 확인 필요)</span>':' <span class="ok">완료</span>');}
@@ -664,9 +751,30 @@
   $('addressExport').onclick=async()=>{if(!shipmentRows.length)return;const bad=shipmentRows.filter(i=>splitSum(i)!==i.qty||i.splits.some(s=>!s.box||Number(s.qty)<=0));if(bad.length&&!confirm(`${bad.length}개 상품의 박스수량 합계/박스번호가 완성되지 않았습니다. 그래도 생성할까요?`))return;const missing=[...new Set(shipmentRows.map(i=>i.center).filter(c=>!addresses.some(a=>a.center===c)))];if(missing.length)return alert('주소 미등록 센터: '+missing.join(', ')+'\n주소 관리에서 먼저 등록해주세요.');const wb=new ExcelJS.Workbook(),ws=wb.addWorksheet('쿠팡주소');ws.addRow(['센터입력','수하인명','번호','수령자휴대폰번호','우편번호','주소','신용','쿠팡로켓','운송장번호','배송기재사항','상품명','옵션','합계금액','총수량']);const out=[];shipmentRows.forEach(i=>i.splits.forEach(s=>{if(!s.box||Number(s.qty)<=0)return;const a=addresses.find(x=>x.center===i.center),box=Number(s.box);out.push({center:i.center,box,po:i.po,sourceIndex:i.sourceIndex??0,row:[i.center,`${i.center}_${box}`,a.phone,'','',a.address,'신용','쿠팡로켓','','',i.name,'','',Number(s.qty)]});}));out.sort((a,b)=>a.center.localeCompare(b.center,'ko')||a.box-b.box||compareNumericText(a.po,b.po)||a.sourceIndex-b.sourceIndex);out.forEach(x=>ws.addRow(x.row));ws.columns=[{width:14},{width:18},{width:16},{width:14},{width:10},{width:52},{width:10},{width:12},{width:18},{width:16},{width:55},{width:12},{width:12},{width:10}];const buf=await wb.xlsx.writeBuffer();download(new Blob([buf]),'쿠팡주소_송장작업.xlsx');};
 
   // ---------- Tracking ----------
-  let trackingRows=[];
+  let trackingRows=[],trackingFile=null,trackingGeneration=0;
+  function clearTrackingFile(){
+    trackingGeneration++;
+    trackingFile=null;
+    trackingRows=[];
+    $('trackingInput').value='';
+    hideSelectedFile('trackingFileState','trackingName');
+    $('trackingSummary').textContent='';
+    $('trackingTable').querySelector('tbody').innerHTML='';
+    $('trackingDownload').disabled=true;
+  }
   $('trackingSelect').onclick=()=>$('trackingInput').click();
-  $('trackingInput').onchange=async()=>{const f=$('trackingInput').files[0];if(!f)return;try{const wb=new ExcelJS.Workbook();await wb.xlsx.load(await f.arrayBuffer());const ws=wb.worksheets[0],map=new Map(),conflicts=new Set();for(let r=2;r<=ws.rowCount;r++){const way=text(ws.getCell(r,7).value),recipient=text(ws.getCell(r,16).value);if(!recipient||!way)continue;if(map.has(recipient)&&map.get(recipient)!==way)conflicts.add(recipient);else map.set(recipient,way);}trackingRows=[...map].map(([recipient,waybill])=>({recipient,waybill,status:conflicts.has(recipient)?'확인 필요':'정상'})).sort((a,b)=>a.recipient.localeCompare(b.recipient,'ko',{numeric:true}));renderTracking();$('trackingDownload').disabled=!trackingRows.length;}catch(e){alert('송장 파일 오류: '+e.message);}finally{$('trackingInput').value='';}};
+  $('trackingClear').onclick=clearTrackingFile;
+  $('trackingInput').onchange=async()=>{const f=$('trackingInput').files[0];clearTrackingFile();if(!f)return;trackingFile=f;const currentGeneration=trackingGeneration;showSelectedFile('trackingFileState','trackingName',f.name);try{const wb=new ExcelJS.Workbook();await wb.xlsx.load(await f.arrayBuffer());if(currentGeneration!==trackingGeneration||trackingFile!==f)return;const ws=wb.worksheets[0],map=new Map(),conflicts=new Set();for(let r=2;r<=ws.rowCount;r++){const way=text(ws.getCell(r,7).value),recipient=text(ws.getCell(r,16).value);if(!recipient||!way)continue;if(map.has(recipient)&&map.get(recipient)!==way)conflicts.add(recipient);else map.set(recipient,way);}trackingRows=[...map].map(([recipient,waybill])=>({recipient,waybill,status:conflicts.has(recipient)?'확인 필요':'정상'})).sort((a,b)=>a.recipient.localeCompare(b.recipient,'ko',{numeric:true}));renderTracking();$('trackingDownload').disabled=!trackingRows.length;}catch(e){if(currentGeneration===trackingGeneration)alert('송장 파일 오류: '+e.message);}};
   function renderTracking(){const tb=$('trackingTable').querySelector('tbody');tb.innerHTML='';let lastCenter='',groupIndex=-1;trackingRows.forEach(x=>{const center=x.recipient.replace(/_\d+$/,'');if(center!==lastCenter){lastCenter=center;groupIndex++;}const tr=document.createElement('tr');if(groupIndex%2===1)tr.classList.add('center-alt');tr.innerHTML=`<td>${esc(x.recipient)}</td><td>${esc(x.waybill)}</td><td class="${x.status==='정상'?'ok':'warn'}">${x.status}</td>`;tb.appendChild(tr);});$('trackingSummary').textContent=`중복 제거 후 ${trackingRows.length}개 수하인명`;}
   $('trackingDownload').onclick=async()=>{const wb=new ExcelJS.Workbook(),ws=wb.addWorksheet('운송장매칭');ws.addRow(['수하인명','운송장번호','상태']);trackingRows.forEach(x=>ws.addRow([x.recipient,x.waybill,x.status]));const buf=await wb.xlsx.writeBuffer();download(new Blob([buf]),'쿠팡_운송장매칭.xlsx');};
+  if (globalThis.__ORDER_CLEANER_TEST_MODE__) {
+    globalThis.__UPLOAD_STATE_TEST__ = {
+      setPoFile,
+      clearPoFile,
+      clearAddrFile,
+      clearShipmentFile,
+      clearTrackingFile,
+      getPoFileName: () => poFile ? poFile.name : ""
+    };
+  }
 })();

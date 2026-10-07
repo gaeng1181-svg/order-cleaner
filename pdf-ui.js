@@ -11,6 +11,7 @@
   let fourResultName = '';
   let fourPrintFrame = null;
   let fourCore;
+  let fourFiles = [];
   const resetResult = () => {
     $('pdfDownload').disabled = true;
     $('pdfPrint').disabled = true;
@@ -67,11 +68,69 @@
     $('pdfFourError').textContent = '브라우저가 인쇄창을 차단했습니다. PDF 다운로드 기능은 계속 사용할 수 있습니다.';
     $('pdfFourError').hidden = false;
   };
+  const clearPdfSelection = () => {
+    generation++;
+    $('pdfInput').value = '';
+    resetResult();
+    resultName = '';
+    $('pdfName').textContent = '거래명세서 PDF를 선택하거나 여기에 드롭하세요';
+    $('pdfClear').hidden = true;
+    ['pdfTotal', 'pdfIncluded', 'pdfExcluded'].forEach(id => $(id).textContent = '—');
+    $('pdfPages').textContent = '';
+    $('pdfStatus').textContent = 'PDF를 선택하면 분석을 시작합니다.';
+    $('pdfError').textContent = '';
+    $('pdfError').hidden = true;
+    $('pdfDropZone').classList.remove('is-dragging');
+  };
+  const renderFourFileList = () => {
+    const list = $('pdfFourList');
+    list.innerHTML = '';
+    fourFiles.forEach((file, index) => {
+      const row = document.createElement('div');
+      row.className = 'pdf-file-item';
+      const name = document.createElement('span');
+      name.textContent = `${index + 1}. ${file.name}`;
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'file-remove';
+      remove.textContent = '×';
+      remove.setAttribute('aria-label', `${file.name} 제거`);
+      remove.addEventListener('click', () => removeFourFileAt(index));
+      row.append(name, remove);
+      list.appendChild(row);
+    });
+    $('pdfFourClearAll').hidden = !fourFiles.length;
+  };
+  const removeFourFileAt = (index, shouldProcess = true) => {
+    if (index < 0 || index >= fourFiles.length) return;
+    fourFiles.splice(index, 1);
+    $('pdfFourInput').value = '';
+    if (!fourFiles.length) return clearFourSelection();
+    if (shouldProcess) processFourPdfs();
+    else renderFourFileList();
+  };
+  const clearFourSelection = () => {
+    fourGeneration++;
+    fourFiles = [];
+    $('pdfFourInput').value = '';
+    resetFourResult();
+    fourResultName = '';
+    $('pdfFourName').textContent = '쉽먼트 PDF를 여러 개 선택하거나 여기에 드롭하세요';
+    ['pdfFourFiles', 'pdfFourInputPages', 'pdfFourSheets', 'pdfFourPlaced'].forEach(id => $(id).textContent = '—');
+    $('pdfFourList').innerHTML = '';
+    $('pdfFourVerification').textContent = '';
+    $('pdfFourStatus').textContent = 'PDF를 선택하면 4분할 합본을 시작합니다.';
+    $('pdfFourError').textContent = '';
+    $('pdfFourError').hidden = true;
+    $('pdfFourClearAll').hidden = true;
+    $('pdfFourDropZone').classList.remove('is-dragging');
+  };
   async function choosePdf(file) {
     if (!file) return;
     const current = ++generation;
     resetResult();
     $('pdfName').textContent = file.name;
+    $('pdfClear').hidden = false;
     $('pdfError').hidden = true;
     $('pdfPages').textContent = '';
     ['pdfTotal', 'pdfIncluded', 'pdfExcluded'].forEach(id => $(id).textContent = '—');
@@ -108,8 +167,14 @@
     }
   }
   async function chooseFourPdfs(fileList) {
-    const files = Array.from(fileList || []);
-    if (!files.length) return;
+    fourFiles = Array.from(fileList || []);
+    $('pdfFourInput').value = '';
+    if (!fourFiles.length) return clearFourSelection();
+    await processFourPdfs();
+  }
+  async function processFourPdfs() {
+    const files = fourFiles.slice();
+    if (!files.length) return clearFourSelection();
     const current = ++fourGeneration;
     resetFourResult();
     $('pdfFourError').hidden = true;
@@ -117,7 +182,7 @@
     ['pdfFourInputPages', 'pdfFourSheets', 'pdfFourPlaced'].forEach(id => $(id).textContent = '—');
     $('pdfFourFiles').textContent = files.length;
     $('pdfFourName').textContent = `${files.length}개 PDF 선택됨`;
-    $('pdfFourList').textContent = files.map((file, index) => `${index + 1}. ${file.name}`).join('\n');
+    renderFourFileList();
     try {
       const invalid = files.find(file => !/\.pdf$/i.test(file.name));
       if (invalid) throw new Error(`${invalid.name}: PDF 파일만 선택할 수 있습니다.`);
@@ -147,9 +212,9 @@
     }
   }
   $('pdfSelect').addEventListener('click', () => $('pdfInput').click());
+  $('pdfClear').addEventListener('click', clearPdfSelection);
   $('pdfInput').addEventListener('change', () => {
     choosePdf($('pdfInput').files[0]);
-    $('pdfInput').value = '';
   });
   ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(name => {
     $('pdfDropZone').addEventListener(name, event => {
@@ -182,9 +247,9 @@
     }
   });
   $('pdfFourSelect').addEventListener('click', () => $('pdfFourInput').click());
+  $('pdfFourClearAll').addEventListener('click', clearFourSelection);
   $('pdfFourInput').addEventListener('change', async () => {
     await chooseFourPdfs($('pdfFourInput').files);
-    $('pdfFourInput').value = '';
   });
   ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(name => {
     $('pdfFourDropZone').addEventListener(name, event => {
@@ -216,5 +281,15 @@
       showFourPrintFailure();
     }
   });
+  if (globalThis.__ORDER_CLEANER_TEST_MODE__) {
+    globalThis.__PDF_FILE_TEST__ = {
+      clearPdfSelection,
+      clearFourSelection,
+      chooseFourPdfs,
+      getFourFileNames: () => fourFiles.map(file => file.name),
+      setFourFilesForTest: files => { fourFiles = Array.from(files || []); renderFourFileList(); },
+      removeFourFileAt
+    };
+  }
   window.addEventListener('pagehide', () => { resetResult(); resetFourResult(); });
 })();

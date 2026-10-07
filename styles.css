@@ -116,6 +116,13 @@ h2 small { color: var(--muted); font-size: .72rem; font-weight: 650; letter-spac
 .file-copy { min-width: 0; display: flex; flex-direction: column; gap: 7px; }
 .file-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1rem; }
 .file-copy span { color: var(--muted); font-size: .83rem; }
+.file-title-row{min-width:0;display:flex;align-items:center;gap:8px;}
+.file-title-row strong{min-width:0;}
+.file-remove{width:25px;height:25px;display:inline-grid;place-items:center;flex:0 0 auto;padding:0;border:1px solid #c9d3ce;border-radius:50%;background:#fff;color:#7b3939;font-size:1.1rem;line-height:1;cursor:pointer;}
+.file-remove:hover{border-color:#bd8f8f;background:#fff4f4;}
+.selected-file{max-width:300px;display:inline-flex;align-items:center;gap:7px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:var(--soft);color:var(--ink);font-size:.82rem;}
+.selected-file > span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.selected-file[hidden],.file-remove[hidden]{display:none;}
 
 .secondary-button, .primary-button {
   border-radius: 8px;
@@ -183,4 +190,8 @@ h2 small { color: var(--muted); font-size: .72rem; font-weight: 650; letter-spac
 .pdf-tool:first-of-type{margin-top:18px;padding-top:0;border-top:0;}
 .pdf-tool h3{margin:0;font-size:1.02rem;color:var(--ink);}
 .pdf-file-list{white-space:pre-line;}
+.pdf-list-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+.pdf-file-list{display:flex;flex:1;flex-direction:column;gap:6px;white-space:normal;}
+.pdf-file-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--soft);}
+.pdf-file-item > span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 @media(max-width:720px){.pdf-actions{width:100%;}.pdf-actions button{flex:1;}}
