@@ -44,6 +44,14 @@
     ["1011030533709", {
       productTerms: ["티에소", "사각드로즈"],
       baseName: "티에소 사각드로즈"
+    }],
+    ["3545935886", {
+      baseName: "땀복상의",
+      prefix: "2_",
+      includeOption: false
+    }],
+    ["7802128959", {
+      baseName: "체크무늬 식탁보"
     }]
   ]);
 
@@ -315,9 +323,9 @@
     const rule = PRODUCT_ALIAS_EXCEPTIONS.get(cellText(productNumberValue).trim());
     if (!rule) return "";
     const productText = cellText(productValue);
-    if (!rule.productTerms.every((term) => productText.includes(term))) return "";
-    const option = cleanAlias(optionValue, quantityValue);
-    return finalizeAlias(`${rule.baseName} ${option}`);
+    if (rule.productTerms && !rule.productTerms.every((term) => productText.includes(term))) return "";
+    const option = rule.includeOption === false ? "" : cleanAlias(optionValue, quantityValue);
+    return finalizeAlias(`${rule.prefix || ""}${rule.baseName}${option ? ` ${option}` : ""}`);
   }
 
   function isAgricultureProduct(productValue, optionValue, aliasValue) {

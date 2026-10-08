@@ -141,4 +141,30 @@ assert.notEqual(
   '티에소 사각드로즈 블랙(남) 2XL'
 );
 
+// 상품번호 exact match 예외: 다른 상품에는 동일한 기본명을 붙이지 않습니다.
+assert.equal(
+  buildAlias('BUCK703 땀복상의', '색상:블랙/사이즈:XL', '', 1, '3545935886'),
+  '2_땀복상의'
+);
+assert.equal(
+  buildAlias('BUCK703 국내생산 남녀공용 땀복 상의', '', '', 1, '3545935886'),
+  '2_땀복상의'
+);
+assert.equal(
+  buildAlias('벅703 체크무늬 식탁보 2~4인용', '블루 140 x 100 cm 140cm', '', 1, '7802128959'),
+  '체크무늬 식탁보 블루 140 x 100 cm 140cm'
+);
+assert.equal(
+  buildAlias('벅703 체크무늬 식탁보 2~4인용', '레드 140 x 100 cm 140cm', '', 1, '7802128959'),
+  '체크무늬 식탁보 레드 140 x 100 cm 140cm'
+);
+assert.doesNotMatch(
+  buildAlias('일반 상품', '블루 140 x 100 cm 140cm', '', 1, '9999999999'),
+  /체크무늬 식탁보/
+);
+assert.notEqual(
+  buildAlias('BUCK703 국내생산 남녀공용 땀복 상의', '', '', 1, '9999999999'),
+  '2_땀복상의'
+);
+
 console.log('order name cleaning: requested cases and regressions passed');

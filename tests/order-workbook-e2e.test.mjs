@@ -102,7 +102,8 @@ const expected = new Map([
   [2, '접이식 캠핑화로대 420x420'],
   [3, '티에소 사각드로즈 그레이(남) 2XL'],
   [4, '티에소 사각드로즈 블랙(남) 2XL'],
-  [11, '1_접이식(1+1) 블랙XL+그레이L']
+  [11, '1_접이식(1+1) 블랙XL+그레이L'],
+  [39, '체크무늬 식탁보 블루 140 x 100 cm 140cm']
 ]);
 for (const [row, value] of expected) {
   assert.equal(targetSheet.getCell(row, 14).value, value, `작업!N${row}`);
