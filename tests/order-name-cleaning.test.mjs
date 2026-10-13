@@ -167,4 +167,32 @@ assert.notEqual(
   '2_땀복상의'
 );
 
+// 상품번호 exact match 분류가 혼재된 키워드보다 우선합니다.
+assert.equal(
+  buildAlias(
+    'BUCK703 국내산 남여 비치팬츠 비치웨어 반바지 비치반바지 수영복바지 여성 남성 래쉬가드 구명조끼',
+    '주노(남성용) 팜블루 L',
+    '1_주노(남) 팜블루 L',
+    1,
+    '21325340'
+  ),
+  '2_주노(남) 팜블루 L'
+);
+assert.equal(buildAlias('프리미엄 블랙라벨 구명조끼', '', '블랙라벨 L', 1, '999'), '1_블랙라벨 L');
+
+// 포천은 농장/산지 직송 문맥과 결합할 때만 농수산물 신호로 사용합니다.
+assert.match(buildAlias('햇수세미 국내산 생수세미 포천 농장직송 10kg', '', '생수세미 10kg', 1, '999'), /^5_/);
+assert.match(buildAlias('국산 맷돌애호박 포천 산지직송', '', '맷돌애호박 3kg', 1, '999'), /^5_/);
+assert.doesNotMatch(buildAlias('일반 의류 국내산', '', '블랙 XL', 1, '999'), /^5_/);
+assert.doesNotMatch(buildAlias('포천 여행 기념 티셔츠', '', '블랙 XL', 1, '999'), /^5_/);
+assert.match(buildAlias('BUCK703 국내산 남여 비치팬츠', '', '비치팬츠', 1, '21325340'), /^2_/);
+
+// 가격 제거 뒤 내용 없이 남은 괄호/플러스만 제거하고 구성 기호는 보존합니다.
+assert.equal(cleanAlias('선택:형광스트링 6파이 8m 2P-3개 (+3000원)', 1), '형광스트링 6파이 8m 2P-3개');
+assert.equal(buildAlias('', '선택:형광스트링 6파이 8m 2P-3개 (+3000원)', '', 1), '형광스트링 6파이 8m 2P-3개');
+assert.equal(finalizeAlias('형광스트링 6파이 8m 2P-3개 (+)'), '형광스트링 6파이 8m 2P-3개');
+for (const value of ['블랙XL+그레이L', '(1+1)', '30cmx8개 + 가죽팩가방']) {
+  assert.equal(finalizeAlias(value), value, `${value} symbols must be preserved`);
+}
+
 console.log('order name cleaning: requested cases and regressions passed');

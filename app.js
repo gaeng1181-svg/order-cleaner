@@ -39,6 +39,7 @@
     "수세미 거치", "주방 수세미", "주방용 수세미", "청소 수세미", "설거지 수세미",
     "재배망", "재배 망", "지지대", "화분", "모종삽", "삽", "감자칼", "필러", "씨앗", "종자", "비료", "농약"
   ];
+  const AGRICULTURE_ORIGIN_CONTEXT_KEYWORDS = ["농장직송", "농장 직송", "산지직송", "산지 직송", "농산물", "수산물", "생수세미", "호박", "호박잎"];
   const SIZE_ORDER = new Map([["FREE", 0], ["XS", 1], ["S", 2], ["M", 3], ["L", 4], ["XL", 5]]);
   const PRODUCT_ALIAS_EXCEPTIONS = new Map([
     ["1011030533709", {
@@ -52,6 +53,9 @@
     }],
     ["7802128959", {
       baseName: "체크무늬 식탁보"
+    }],
+    ["21325340", {
+      categoryPrefix: "2_"
     }]
   ]);
 
@@ -152,6 +156,8 @@
       .replace(/(?:색상|사이즈)\s*[:：]\s*/gi, "")
       .replace(/\s+\+\s*(?=\(\s*1\s*\+\s*1\s*\))/gi, "")
       .replace(/[:：]+/g, " ")
+      .replace(/\(\s*\+?\s*\)/g, " ")
+      .replace(/^\s*\+\s*|\s*\+\s*$/g, " ")
       .replace(/\(\s*\)/g, " ")
       .replace(/\s+([)])/g, "$1")
       .replace(/([(])\s+/g, "$1")
@@ -170,6 +176,7 @@
       .replace(/\(\s*공용\s*\)/gi, " ")
       .replace(/래쉬\s*가드/gi, " ")
       .replace(/\d[\d,]*\s*원/g, " ")
+      .replace(/\(\s*\+?\s*\)/g, " ")
       .replace(/제품|상품/g, " ")
       .replace(/[\/:]/g, " ")
       .replace(/[\t\r\n]+/g, " ")
@@ -321,7 +328,7 @@
 
   function applyProductAliasException(productNumberValue, productValue, optionValue, quantityValue) {
     const rule = PRODUCT_ALIAS_EXCEPTIONS.get(cellText(productNumberValue).trim());
-    if (!rule) return "";
+    if (!rule || !rule.baseName) return "";
     const productText = cellText(productValue);
     if (rule.productTerms && !rule.productTerms.every((term) => productText.includes(term))) return "";
     const option = rule.includeOption === false ? "" : cleanAlias(optionValue, quantityValue);
@@ -335,7 +342,12 @@
 
     // L 상품명 어디에든 '농산물'이 명시되어 있으면 농산물로 확정합니다.
     // 문장 중간에 있어도 동일하게 처리합니다. (예: 국내산 농산물, 신선농산물, 제철농산물)
-    if (productText.includes("농산물")) return true;
+    if (productText.includes("농산물") || productText.includes("수산물")) return true;
+
+    // 포천이라는 지명 하나만으로 분류하지 않고, 농장/산지 직송 문맥이 함께 있을 때만
+    // 산지 신호로 사용합니다. '국내산'은 이 판단에 사용하지 않습니다.
+    const hasPocheonOrigin = search.includes("포천") && hasKeyword(search, AGRICULTURE_ORIGIN_CONTEXT_KEYWORDS);
+    if (hasPocheonOrigin) return true;
 
     // 그 외에는 실제 품목 키워드만 독립 단어/경계 기준으로 판별하여
     // '핵센귤러' 안의 '귤' 같은 부분문자열 오탐을 방지합니다.
@@ -351,6 +363,7 @@
 
   function buildAlias(productValue, optionValue, aliasValue, quantityValue, productNumberValue) {
     const originalAlias = cellText(aliasValue);
+    const productRule = PRODUCT_ALIAS_EXCEPTIONS.get(cellText(productNumberValue).trim());
 
     const exceptionAlias = applyProductAliasException(
       productNumberValue,
@@ -386,13 +399,13 @@
 
     if (isClothing) body = moveDefectTagToEnd(body);
 
-    let prefix = "";
-    if (isLife) {
+    let prefix = productRule && productRule.categoryPrefix ? productRule.categoryPrefix : "";
+    if (!prefix && isLife) {
       const quantity = Number(quantityValue);
       prefix = Number.isFinite(quantity) && quantity >= 2 ? "4_" : "1_";
-    } else if (isClothing) {
+    } else if (!prefix && isClothing) {
       prefix = "2_";
-    } else if (isAgriculture) {
+    } else if (!prefix && isAgriculture) {
       prefix = "5_";
     }
     return finalizeAlias(`${prefix}${body}`);

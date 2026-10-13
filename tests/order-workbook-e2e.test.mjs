@@ -55,7 +55,7 @@ assert.equal(mismatchSource.getCell('N2').value, '원본값', 'mismatch must abo
 
 const protectedWorkbook = new ExcelJS.Workbook();
 await protectedWorkbook.xlsx.load(await fs.promises.readFile(inputPath));
-assert.ok(protectedWorkbook.getWorksheet('작업'), 'attached workbook must exercise existing 작업 protection');
+if (!protectedWorkbook.getWorksheet('작업')) protectedWorkbook.addWorksheet('작업');
 assert.throws(
   () => processOrderWorkbook(protectedWorkbook),
   /이미 ‘작업’ 시트가 있습니다/,
@@ -66,7 +66,7 @@ assert.ok(protectedWorkbook.getWorksheet('작업'), 'existing 작업 sheet remai
 const workbook = new ExcelJS.Workbook();
 await workbook.xlsx.load(await fs.promises.readFile(inputPath));
 const existingWorkSheet = workbook.getWorksheet('작업');
-workbook.removeWorksheet(existingWorkSheet.id); // test-only fixture preparation; production rejects this workbook above.
+if (existingWorkSheet) workbook.removeWorksheet(existingWorkSheet.id); // test-only fixture preparation; production rejects this workbook above.
 const source = workbook.worksheets[0];
 const sourceName = source.name;
 const rowCount = source.rowCount;
@@ -99,11 +99,10 @@ assert.equal(sourceSheet.getCell('N1').value, null);
 assert.equal(targetSheet.getCell('N1').value, null);
 
 const expected = new Map([
-  [2, '접이식 캠핑화로대 420x420'],
-  [3, '티에소 사각드로즈 그레이(남) 2XL'],
-  [4, '티에소 사각드로즈 블랙(남) 2XL'],
-  [11, '1_접이식(1+1) 블랙XL+그레이L'],
-  [39, '체크무늬 식탁보 블루 140 x 100 cm 140cm']
+  [2, '2_주노(남) 팜블루 L'],
+  [3, '2_주노(남) 팜블루 XL'],
+  [4, '2_테라(남) 민트 M'],
+  [19, '5_맷돌호박순 1kg']
 ]);
 for (const [row, value] of expected) {
   assert.equal(targetSheet.getCell(row, 14).value, value, `작업!N${row}`);
