@@ -899,6 +899,61 @@
   $('trackingInput').onchange=async()=>{const f=$('trackingInput').files[0];clearTrackingFile();if(!f)return;trackingFile=f;const currentGeneration=trackingGeneration;showSelectedFile('trackingFileState','trackingName',f.name);try{const wb=new ExcelJS.Workbook();await wb.xlsx.load(await f.arrayBuffer());if(currentGeneration!==trackingGeneration||trackingFile!==f)return;const ws=wb.worksheets[0],map=new Map(),conflicts=new Set();for(let r=2;r<=ws.rowCount;r++){const way=text(ws.getCell(r,7).value),recipient=text(ws.getCell(r,16).value);if(!recipient||!way)continue;if(map.has(recipient)&&map.get(recipient)!==way)conflicts.add(recipient);else map.set(recipient,way);}trackingRows=[...map].map(([recipient,waybill])=>({recipient,waybill,status:conflicts.has(recipient)?'확인 필요':'정상'})).sort((a,b)=>a.recipient.localeCompare(b.recipient,'ko',{numeric:true}));renderTracking();$('trackingDownload').disabled=!trackingRows.length;}catch(e){if(currentGeneration===trackingGeneration)alert('송장 파일 오류: '+e.message);}};
   function renderTracking(){const tb=$('trackingTable').querySelector('tbody');tb.innerHTML='';let lastCenter='',groupIndex=-1;trackingRows.forEach(x=>{const center=x.recipient.replace(/_\d+$/,'');if(center!==lastCenter){lastCenter=center;groupIndex++;}const tr=document.createElement('tr');if(groupIndex%2===1)tr.classList.add('center-alt');tr.innerHTML=`<td>${esc(x.recipient)}</td><td>${esc(x.waybill)}</td><td class="${x.status==='정상'?'ok':'warn'}">${x.status}</td>`;tb.appendChild(tr);});$('trackingSummary').textContent=`중복 제거 후 ${trackingRows.length}개 수하인명`;}
   $('trackingDownload').onclick=async()=>{const wb=new ExcelJS.Workbook(),ws=wb.addWorksheet('운송장매칭');ws.addRow(['수하인명','운송장번호','상태']);trackingRows.forEach(x=>ws.addRow([x.recipient,x.waybill,x.status]));const buf=await wb.xlsx.writeBuffer();download(new Blob([buf]),'쿠팡_운송장매칭.xlsx');};
+
+  // ---------- Return cleanup ----------
+  const RETURN_HEADERS=['원운송장번호','송하인명','운송장번호'];
+  let returnFile=null,returnWorkbook=null,returnRows=[],returnReady=false,returnGeneration=0;
+  function returnCellText(value){
+    if(value==null)return '';
+    if(typeof value==='object'){
+      if(value.text!=null)return String(value.text).trim();
+      if(value.result!=null)return String(value.result).trim();
+      if(Array.isArray(value.richText))return value.richText.map(x=>x.text||'').join('').trim();
+    }
+    return String(value).trim();
+  }
+  function findReturnHeader(workbook){
+    let best={count:0,found:new Set()};
+    for(const ws of workbook.worksheets){
+      for(let r=1;r<=ws.rowCount;r++){
+        const columns={},found=new Set();
+        const cellCount=Math.max(ws.columnCount,ws.getRow(r).cellCount);
+        for(let c=1;c<=cellCount;c++){
+          const header=returnCellText(ws.getCell(r,c).value);
+          if(RETURN_HEADERS.includes(header)&&columns[header]==null){columns[header]=c;found.add(header);}
+        }
+        if(found.size>best.count)best={count:found.size,found};
+        if(found.size===RETURN_HEADERS.length)return {ws,headerRow:r,columns};
+      }
+    }
+    const missing=RETURN_HEADERS.filter(name=>!best.found.has(name));
+    throw new Error(`필수 열을 찾을 수 없습니다: ${missing.join(', ')}`);
+  }
+  function extractReturnRows(workbook){
+    const {ws,headerRow,columns}=findReturnHeader(workbook),rows=[];
+    for(let r=headerRow+1;r<=ws.rowCount;r++){
+      const originalWaybill=returnCellText(ws.getCell(r,columns['원운송장번호']).value);
+      if(!originalWaybill)continue;
+      rows.push({originalWaybill,senderName:returnCellText(ws.getCell(r,columns['송하인명']).value),waybill:returnCellText(ws.getCell(r,columns['운송장번호']).value)});
+    }
+    return {rows,sheetName:ws.name,headerRow,columns};
+  }
+  function createReturnWorkbook(rows){
+    const workbook=new ExcelJS.Workbook(),ws=workbook.addWorksheet('반품정리');
+    ws.columns=[{width:22,style:{numFmt:'@'}},{width:20},{width:4},{width:22,style:{numFmt:'@'}}];
+    ws.addRow(['원운송장번호','송하인명','','운송장번호']);
+    for(const x of rows){const row=ws.addRow();row.getCell(1).value=String(x.originalWaybill);row.getCell(2).value=String(x.senderName);row.getCell(3).value='';row.getCell(4).value=String(x.waybill);}
+    return workbook;
+  }
+  function clearReturnFile(){
+    returnGeneration++;returnFile=null;returnWorkbook=null;returnRows=[];returnReady=false;
+    $('returnInput').value='';hideSelectedFile('returnFileState','returnName');$('returnStatus').textContent='';$('returnRun').disabled=true;$('returnDownload').disabled=true;
+  }
+  $('returnSelect').onclick=()=>$('returnInput').click();
+  $('returnClear').onclick=clearReturnFile;
+  $('returnInput').onchange=()=>{const f=$('returnInput').files[0];clearReturnFile();if(!f)return;returnFile=f;showSelectedFile('returnFileState','returnName',f.name);$('returnRun').disabled=false;$('returnStatus').textContent='파일을 선택했습니다.';};
+  $('returnRun').onclick=async()=>{if(!returnFile)return;const f=returnFile,currentGeneration=returnGeneration;$('returnRun').disabled=true;$('returnDownload').disabled=true;$('returnStatus').textContent='처리 중…';try{const workbook=new ExcelJS.Workbook();await workbook.xlsx.load(await f.arrayBuffer());if(currentGeneration!==returnGeneration||returnFile!==f)return;const result=extractReturnRows(workbook);returnWorkbook=workbook;returnRows=result.rows;returnReady=true;$('returnDownload').disabled=false;$('returnStatus').textContent=`완료 · ${result.sheetName} ${result.headerRow}행에서 헤더 확인 · ${returnRows.length}건`;}catch(e){if(currentGeneration===returnGeneration){returnWorkbook=null;returnRows=[];returnReady=false;$('returnStatus').textContent='오류 · '+e.message;}}finally{if(currentGeneration===returnGeneration&&returnFile===f)$('returnRun').disabled=false;}};
+  $('returnDownload').onclick=async()=>{if(!returnReady)return;const wb=createReturnWorkbook(returnRows),buf=await wb.xlsx.writeBuffer();download(new Blob([buf]),'반품정리.xlsx');};
   if (globalThis.__ORDER_CLEANER_TEST_MODE__) {
     globalThis.__UPLOAD_STATE_TEST__ = {
       setPoFile,
@@ -906,10 +961,12 @@
       clearAddrFile,
       clearShipmentFile,
       clearTrackingFile,
+      clearReturnFile,
       clearOosExcel,
       getPoFileName: () => poFile ? poFile.name : ""
     };
     globalThis.__OOS_SKU_TEST__={OOS_KEY,DEFAULT_OOS_SKUS:[...DEFAULT_OOS_SKUS],normalizeSku,parseSkuInput,extractSkuIdsFromWorkbook,addOutOfStockSkus,isOutOfStockSku,applyOutOfStockFill,sortCoupangRows,getSkus:()=>[...outOfStockSkus],clearOosExcel};
+    globalThis.__RETURN_CLEANUP_TEST__={RETURN_HEADERS:[...RETURN_HEADERS],returnCellText,findReturnHeader,extractReturnRows,createReturnWorkbook,clearReturnFile};
   }
 })();
 
