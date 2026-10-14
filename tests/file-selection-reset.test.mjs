@@ -89,7 +89,8 @@ assert.equal(appHarness.document.getElementById('poRun').disabled, true);
 for (const [clear, inputId, stateId, buttonId] of [
   [uploads.clearAddrFile, 'addrInput', 'addrFileState', null],
   [uploads.clearShipmentFile, 'shipInput', 'shipFileState', 'shipSave'],
-  [uploads.clearTrackingFile, 'trackingInput', 'trackingFileState', 'trackingDownload']
+  [uploads.clearTrackingFile, 'trackingInput', 'trackingFileState', 'trackingDownload'],
+  [uploads.clearReturnFile, 'returnInput', 'returnFileState', 'returnDownload']
 ]) {
   appHarness.document.getElementById(inputId).value = 'selected';
   appHarness.document.getElementById(stateId).hidden = false;
@@ -119,3 +120,4 @@ assert.equal(pdfHarness.document.getElementById('pdfError').hidden, true);
 assert.equal(pdfHarness.document.getElementById('pdfDownload').disabled, true);
 
 console.log('file selection reset: order, PO, shipment, tracking, address, and PDF cases passed');
+
