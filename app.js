@@ -912,6 +912,7 @@
     }
     return String(value).trim();
   }
+  function normalizeWaybillIdentifier(value){return returnCellText(value).replace(/[-\s]+/g,'');}
   function findReturnHeader(workbook){
     let best={count:0,found:new Set()};
     for(const ws of workbook.worksheets){
@@ -932,9 +933,9 @@
   function extractReturnRows(workbook){
     const {ws,headerRow,columns}=findReturnHeader(workbook),rows=[];
     for(let r=headerRow+1;r<=ws.rowCount;r++){
-      const originalWaybill=returnCellText(ws.getCell(r,columns['원운송장번호']).value);
+      const originalWaybill=normalizeWaybillIdentifier(ws.getCell(r,columns['원운송장번호']).value);
       if(!originalWaybill)continue;
-      rows.push({originalWaybill,senderName:returnCellText(ws.getCell(r,columns['송하인명']).value),waybill:returnCellText(ws.getCell(r,columns['운송장번호']).value)});
+      rows.push({originalWaybill,senderName:returnCellText(ws.getCell(r,columns['송하인명']).value),waybill:normalizeWaybillIdentifier(ws.getCell(r,columns['운송장번호']).value)});
     }
     return {rows,sheetName:ws.name,headerRow,columns};
   }
@@ -943,6 +944,7 @@
     ws.columns=[{width:22,style:{numFmt:'@'}},{width:20},{width:4},{width:22,style:{numFmt:'@'}}];
     ws.addRow(['원운송장번호','송하인명','','운송장번호']);
     for(const x of rows){const row=ws.addRow();row.getCell(1).value=String(x.originalWaybill);row.getCell(2).value=String(x.senderName);row.getCell(3).value='';row.getCell(4).value=String(x.waybill);}
+    for(let r=1;r<=ws.rowCount;r++)for(let c=1;c<=4;c++)ws.getCell(r,c).alignment={horizontal:'center',vertical:'middle'};
     return workbook;
   }
   function clearReturnFile(){
@@ -966,7 +968,7 @@
       getPoFileName: () => poFile ? poFile.name : ""
     };
     globalThis.__OOS_SKU_TEST__={OOS_KEY,DEFAULT_OOS_SKUS:[...DEFAULT_OOS_SKUS],normalizeSku,parseSkuInput,extractSkuIdsFromWorkbook,addOutOfStockSkus,isOutOfStockSku,applyOutOfStockFill,sortCoupangRows,getSkus:()=>[...outOfStockSkus],clearOosExcel};
-    globalThis.__RETURN_CLEANUP_TEST__={RETURN_HEADERS:[...RETURN_HEADERS],returnCellText,findReturnHeader,extractReturnRows,createReturnWorkbook,clearReturnFile};
+    globalThis.__RETURN_CLEANUP_TEST__={RETURN_HEADERS:[...RETURN_HEADERS],returnCellText,normalizeWaybillIdentifier,findReturnHeader,extractReturnRows,createReturnWorkbook,clearReturnFile};
   }
 })();
 
