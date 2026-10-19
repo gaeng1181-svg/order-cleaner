@@ -1,0 +1,71 @@
+name: Deploy CS Worker (manual)
+on:
+  push:
+    branches: [review/cs-worker-actions]
+    paths: ['worker/**', 'tests/cs-deploy.test.mjs', '.github/workflows/deploy-cs-worker.yml']
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Deploy only order-cleaner-cs and run four paid synthetic calls within the existing API budget
+        type: boolean
+        required: true
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: order-cleaner-cs-worker-deployment
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/cs-deploy.test.mjs tests/cs-replies.test.mjs
+      - run: npm install --no-save --package-lock=false wrangler@4.151.1
+      - name: Compile only; no Cloudflare credentials
+        working-directory: worker
+        env:
+          WRANGLER_SEND_METRICS: 'false'
+        run: ../node_modules/.bin/wrangler deploy --config wrangler.json --dry-run --outdir /tmp/cs-worker-build
+  deploy:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.deploy
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: order-cleaner-cs-production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save --package-lock=false wrangler@4.151.1
+      - name: Validate credentials, fail-closed bootstrap, apply runtime secrets and deploy CS Worker
+        id: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CS_PASSWORD: ${{ secrets.CS_PASSWORD }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          CS_FREE_PLAN_CONFIRMED: ${{ vars.CS_FREE_PLAN_CONFIRMED }}
+          CS_API_BUDGET_CONFIRMED: ${{ vars.CS_API_BUDGET_CONFIRMED }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: node worker/scripts/deploy.mjs
+      - name: Live HTTPS, CORS, authentication, rate limits and synthetic AI checks
+        env:
+          CS_ENDPOINT: ${{ steps.worker.outputs.endpoint }}
+          CS_PASSWORD: ${{ secrets.CS_PASSWORD }}
+        run: node worker/scripts/smoke.mjs
+      - name: Verified public endpoint only
+        env:
+          CS_ENDPOINT: ${{ steps.worker.outputs.endpoint }}
+        run: |
+          node -e 'console.log("Worker security and synthetic checks passed. Public endpoint: " + process.env.CS_ENDPOINT)'
