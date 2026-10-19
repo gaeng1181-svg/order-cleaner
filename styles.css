@@ -224,3 +224,5 @@ h2 small { color: var(--muted); font-size: .72rem; font-weight: 650; letter-spac
 #panel-cs .cs-template p, #panel-cs .cs-pre { white-space:pre-wrap; overflow-wrap:anywhere; }
 #panel-cs #csCount { color:var(--muted); font-weight:400; margin-left:8px; }
 @media(max-width:640px) { #panel-cs .cs-grid { grid-template-columns:1fr; gap:0; } }
+
+#panel-cs [hidden] { display:none; }
