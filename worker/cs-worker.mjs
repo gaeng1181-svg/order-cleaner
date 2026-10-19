@@ -37,7 +37,7 @@ export default {async fetch(req,env){
     const total=await env.CS_RATE_LIMITER.limit({key:'authenticated-total'});if(!total.success)return respond(429,{error:'rate_limited'});
     if(!req.headers.get('Content-Type')?.startsWith('application/json'))return respond(415,{error:'json_required'});
     let payload;try{payload=validatePayload(await boundedBody(req));}catch{return respond(400,{error:'invalid_input'});}
-    const upstream=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+env.OPENAI_API_KEY},body:JSON.stringify({model:env.OPENAI_MODEL,store:false,instructions:INSTRUCTIONS,input:JSON.stringify(payload),max_output_tokens:1800,text:{format:{type:'json_schema',name:'cs_reply',strict:true,schema}}}),signal:AbortSignal.timeout(25000)});
+    const upstream=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+env.OPENAI_API_KEY},body:JSON.stringify({model:env.OPENAI_MODEL,...(env.OPENAI_MODEL==='gpt-5.6-luna'?{reasoning:{effort:'none'}}:{}),store:false,instructions:INSTRUCTIONS,input:JSON.stringify(payload),max_output_tokens:1800,text:{format:{type:'json_schema',name:'cs_reply',strict:true,schema}}}),signal:AbortSignal.timeout(25000)});
     if(!upstream.ok)return respond(502,{error:'provider_unavailable'});
     const data=await upstream.json();if(data.status!=='completed')return respond(502,{error:'incomplete_reply'});
     const text=data.output?.flatMap(x=>x.content||[]).filter(x=>x.type==='output_text').map(x=>x.text).join('');
