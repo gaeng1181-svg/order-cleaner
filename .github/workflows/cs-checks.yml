@@ -1,0 +1,21 @@
+name: CS and existing tool checks
+on:
+  push:
+    branches: [main, feature/cs-replies]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/cs-replies.test.mjs tests/file-selection-reset.test.mjs tests/order-name-cleaning.test.mjs tests/out-of-stock-sku.test.mjs tests/pdf-four-up.test.mjs tests/return-cleanup.test.mjs
+      - run: npm install --no-save --package-lock=false playwright@1.61.1
+      - run: npx playwright install --with-deps chromium
+      - run: |
+          python3 -m http.server 8765 > /tmp/order-cleaner-http.log 2>&1 &
+          node tests/cs-browser.cjs
