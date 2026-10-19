@@ -1,0 +1,9 @@
+{
+  "name": "order-cleaner-cs",
+  "main": "cs-worker.mjs",
+  "compatibility_date": "2026-10-19",
+  "workers_dev": true,
+  "vars": { "ALLOWED_ORIGIN": "https://gaeng1181-svg.github.io" },
+  "ratelimits": [{"name":"CS_RATE_LIMITER","namespace_id":"731901","simple":{"limit":10,"period":60}}],
+  "observability": {"enabled":false}
+}
