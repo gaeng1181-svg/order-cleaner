@@ -1,0 +1,8 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {validateConfig,validateEnvironment} from '../worker/scripts/deploy.mjs';
+const config=JSON.parse(fs.readFileSync(new URL('../worker/wrangler.json',import.meta.url)));
+const env={CLOUDFLARE_API_TOKEN:'synthetic',CLOUDFLARE_ACCOUNT_ID:'a'.repeat(32),OPENAI_API_KEY:'synthetic',CS_PASSWORD:'b'.repeat(32),OPENAI_MODEL:'gpt-5.6-luna',CS_FREE_PLAN_CONFIRMED:'true',CS_API_BUDGET_CONFIRMED:'true',GITHUB_REF:'refs/heads/main',GITHUB_REPOSITORY:'gaeng1181-svg/order-cleaner'};
+test('only the fixed CS Worker and permitted bindings may be deployed',()=>{assert.doesNotThrow(()=>validateConfig(config));assert.throws(()=>validateConfig({...config,name:'another-worker'}));assert.throws(()=>validateConfig({...config,d1_databases:[]}));assert.throws(()=>validateConfig({...config,vars:{...config.vars,CLOUDFLARE_API_TOKEN:'no'}}));assert.throws(()=>validateConfig({...config,observability:{enabled:true}}));});
+test('deployment fails closed before any mutation without required secrets, main, budget and Free confirmation',()=>{assert.doesNotThrow(()=>validateEnvironment(env));for(const key of ['CLOUDFLARE_API_TOKEN','CLOUDFLARE_ACCOUNT_ID','OPENAI_API_KEY','CS_PASSWORD','OPENAI_MODEL'])assert.throws(()=>validateEnvironment({...env,[key]:''}),new RegExp('Missing '+key));for(const patch of [{GITHUB_REF:'refs/heads/other'},{GITHUB_REPOSITORY:'someone/another'},{CS_FREE_PLAN_CONFIRMED:'false'},{CS_API_BUDGET_CONFIRMED:'false'},{CS_PASSWORD:'short'},{ACTIONS_STEP_DEBUG:'true'}])assert.throws(()=>validateEnvironment({...env,...patch}));});
