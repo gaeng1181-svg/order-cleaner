@@ -13,6 +13,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - run: sudo apt-get update && sudo apt-get install -y poppler-utils
       - run: node --test tests/cs-replies.test.mjs tests/file-selection-reset.test.mjs tests/order-name-cleaning.test.mjs tests/out-of-stock-sku.test.mjs tests/pdf-four-up.test.mjs tests/return-cleanup.test.mjs
       - run: npm install --no-save --package-lock=false playwright@1.61.1
       - run: npx playwright install --with-deps chromium
