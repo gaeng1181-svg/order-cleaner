@@ -56,7 +56,10 @@
     }],
     ["21325340", {
       categoryPrefix: "2_"
-    }]
+    }],
+    ["2056413251", { categoryPrefix: "2_" }],
+    ["9769940695", { categoryPrefix: "5_" }],
+    ["9769940746", { categoryPrefix: "5_" }]
   ]);
 
   function setError(message) {
@@ -145,7 +148,7 @@
 
   function normalizeGender(value) {
     return cellText(value)
-      .replace(/남성용|남자|남성/g, "남")
+      .replace(/남성용|남자|남성|님성용/g, "남")
       .replace(/여성용|여자|여성/g, "여")
       .replace(/\s+/g, " ")
       .trim();
@@ -375,14 +378,14 @@
 
     // N에 이미 값이 있어도 상품명 없는 옵션 전용 문자열이면 손대지 않습니다.
     // L열을 보고 임의의 내부 별칭을 추측하거나 1_/2_/4_/5_를 붙이지 않습니다.
-    if (shouldPreserveOriginalAlias(originalAlias)) return finalizeAlias(originalAlias);
+    if (shouldPreserveOriginalAlias(originalAlias)) return finalizeAlias(removeDuplicateOrderQuantityTokens(originalAlias, quantityValue));
 
     const sourceAlias = firstAliasSource(productValue, optionValue, aliasValue);
 
     // N이 비어 M을 fallback으로 쓰는 경우에도 M이 "색상:사이즈:..." 같은 옵션 전용 값이면
     // 상품명을 추측해 새 별칭을 만들지 않습니다. N이 원래 있으면 공통 final cleanup 후 사용하고, 없으면 공란을 유지합니다.
     if (isOptionOnlyText(sourceAlias)) {
-      return finalizeAlias(sourceAlias);
+      return finalizeAlias(removeDuplicateOrderQuantityTokens(sourceAlias, quantityValue));
     }
 
     const cleaned = cleanAlias(sourceAlias, quantityValue);
@@ -769,6 +772,19 @@
     const count=outOfStockSkus.size;$('oosCount').textContent=`등록된 품절 SKU ${count}개`;$('oosCountSummary').textContent=`${count}개`;$('oosClearAll').disabled=count===0;
   }
   function addOutOfStockSkus(values){const unique=[...new Set(values.map(normalizeSku).filter(Boolean))],before=outOfStockSkus.size;unique.forEach(sku=>outOfStockSkus.add(sku));saveOutOfStockSkus();renderOutOfStockSkus();renderPoResult();const added=outOfStockSkus.size-before;return {inputCount:values.length,uniqueCount:unique.length,addedCount:added,duplicateCount:unique.length-added,totalCount:outOfStockSkus.size};}
+  function removeOutOfStockSkus(values){
+    const unique=[...new Set(values.map(normalizeSku).filter(Boolean))];
+    let deletedCount=0;
+    unique.forEach(sku=>{if(outOfStockSkus.delete(sku))deletedCount++;});
+    saveOutOfStockSkus();renderOutOfStockSkus();renderPoResult();
+    return {deletedCount,missingCount:unique.length-deletedCount,totalCount:outOfStockSkus.size};
+  }
+  $('oosDelete').onclick=()=>{
+    const values=parseSkuInput($('oosDeleteInput').value);
+    if(!values.length){$('oosMessage').textContent='삭제할 SKU ID를 입력해주세요.';return;}
+    const result=removeOutOfStockSkus(values);$('oosDeleteInput').value='';
+    $('oosMessage').textContent=`삭제 ${result.deletedCount}개 · 목록에 없음 ${result.missingCount}개 · 현재 품절 SKU ${result.totalCount}개`;
+  };
   $('oosAdd').onclick=()=>{const values=parseSkuInput($('oosSkuInput').value);if(!values.length){$('oosMessage').textContent='등록할 SKU ID를 입력해주세요.';return;}const result=addOutOfStockSkus(values);$('oosSkuInput').value='';$('oosMessage').textContent=`신규 등록 ${result.addedCount}개 · 중복 제외 ${result.duplicateCount}개 · 현재 ${result.totalCount}개`;};
   let oosExcelFile=null,oosExcelGeneration=0;
   function clearOosExcel(){oosExcelGeneration++;oosExcelFile=null;$('oosExcelInput').value='';hideSelectedFile('oosExcelState','oosExcelName');$('oosMessage').textContent='';}
@@ -967,7 +983,7 @@
       clearOosExcel,
       getPoFileName: () => poFile ? poFile.name : ""
     };
-    globalThis.__OOS_SKU_TEST__={OOS_KEY,DEFAULT_OOS_SKUS:[...DEFAULT_OOS_SKUS],normalizeSku,parseSkuInput,extractSkuIdsFromWorkbook,addOutOfStockSkus,isOutOfStockSku,applyOutOfStockFill,sortCoupangRows,getSkus:()=>[...outOfStockSkus],clearOosExcel};
+    globalThis.__OOS_SKU_TEST__={OOS_KEY,DEFAULT_OOS_SKUS:[...DEFAULT_OOS_SKUS],normalizeSku,parseSkuInput,extractSkuIdsFromWorkbook,addOutOfStockSkus,removeOutOfStockSkus,isOutOfStockSku,applyOutOfStockFill,sortCoupangRows,getSkus:()=>[...outOfStockSkus],clearOosExcel};
     globalThis.__RETURN_CLEANUP_TEST__={RETURN_HEADERS:[...RETURN_HEADERS],returnCellText,normalizeWaybillIdentifier,findReturnHeader,extractReturnRows,createReturnWorkbook,clearReturnFile};
   }
 })();
