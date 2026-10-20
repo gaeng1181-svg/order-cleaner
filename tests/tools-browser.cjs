@@ -21,7 +21,7 @@ const ExcelJS=require('../vendor/exceljs.min.js');
     assert.match(await page.locator('#oosMessage').textContent(),/삭제 1개 · 목록에 없음 1개 · 현재 품절 SKU 75개/);
     assert.equal(await page.locator('#poResultTable tr.is-out-of-stock').count(),1,'highlight updates without reupload');
     assert.match(await page.locator('#poResultTable tr.is-out-of-stock').textContent(),/26887177250/);
-    download=page.waitForEvent('download');await page.locator('#poRun').click();const result=await download;const wb=new ExcelJS.Workbook();await wb.xlsx.readFile(await result.path());
+    download=page.waitForEvent('download');await page.locator('#poRun').click();const result=await download;const wb=new ExcelJS.Workbook();await wb.xlsx.load(await require('node:fs/promises').readFile(await result.path()));
     const rows=[];wb.worksheets[0].eachRow(r=>{if(['2688717725','26887177250'].includes(String(r.getCell(3).value)))rows.push(r);});assert.equal(rows.length,2);assert.ok(!rows[0].getCell(1).fill?.fgColor);assert.equal(rows[1].getCell(1).fill.fgColor.argb,'FFFFF2CC');
     await page.reload();await page.getByRole('button',{name:'쿠팡 발주 정리',exact:true}).click();await page.locator('.oos-manager summary').click();
     assert.match(await page.locator('#oosCount').textContent(),/75개/);assert.equal(await page.evaluate(()=>localStorage.getItem('test-marker')),'keep');
