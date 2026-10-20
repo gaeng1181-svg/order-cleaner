@@ -196,3 +196,44 @@ for (const value of ['블랙XL+그레이L', '(1+1)', '30cmx8개 + 가죽팩가�
 }
 
 console.log('order name cleaning: requested cases and regressions passed');
+
+// 2026-10: clean price/duplicate quantity even in option-only preserved aliases.
+for (const option of ['사이즈:XL/0원/1개','민트:L-XL/0원/1개','색상:사이즈:블랙:XL/0원/1개']) {
+  for (const alias of ['',option]) {
+    const value=buildAlias('일반 의류',option,alias,1,'999');
+    assert.doesNotMatch(value,/0원|\/1개/);
+    assert.match(value,/XL/);
+  }
+}
+assert.equal(removeDuplicateOrderQuantityTokens('XL/0원/1개',1),'XL');
+assert.equal(removeDuplicateOrderQuantityTokens('XL/0원/1개',2),'XL/1개');
+for(const input of ['1개:1세트','2개:1세트','50개:1세트','2P','2개입','1+1','2+1'])assert.equal(removeDuplicateOrderQuantityTokens(input+'/0원/1개',1),input);
+for(const value of ['남성용','남성','남자','님성용'])assert.equal(normalizeGender(value),'남');
+for(const value of ['여성용','여성','여자'])assert.equal(normalizeGender(value),'여');
+assert.equal(normalizeGender('블랙(님성용) XL'),'블랙(남) XL');
+for(const [id,weight] of [['9769940695','1kg'],['9769940746','2kg']]){
+  assert.equal(buildAlias('생고추 '+weight,'','생고추 '+weight,1,id),'5_생고추 '+weight);
+  assert.equal(buildAlias('일반상품','','테스트',1,id),'5_테스트');
+  assert.notEqual(buildAlias('일반상품','','테스트',1,id+'0'),'5_테스트');
+}
+assert.equal(buildAlias('구명조끼 래쉬가드','','1_테라(님성용) 민트 L',1,'2056413251'),'2_테라(남) 민트 L');
+assert.equal(buildAlias('구명조끼 래쉬가드','','1_테라(남) 민트 L',1,'20564132510'),'1_테라(남) 민트 L');
+for(const product of ['프리미엄 블랙라벨 구명조끼','접이식 구명조끼'])assert.match(buildAlias(product,'',product,1,'999'),/^1_/);
+console.log('integrated order fixes: price/quantity branches, typo and exact-match category exceptions passed');
+
+// Synthetic XLSX round-trip also verifies source N synchronization and fallback.
+const {createRequire}=await import('node:module');
+const ExcelJS=createRequire(import.meta.url)('../vendor/exceljs.min.js');
+const wb=new ExcelJS.Workbook(),ws=wb.addWorksheet('20261020_원본');
+ws.addRow(Array.from({length:23},(_,i)=>'열'+(i+1)));
+const rows=[
+  ['A','생고추 1kg','','생고추 1kg',1,'9769940695','5_생고추 1kg'],
+  ['B','구명조끼 래쉬가드','','1_테라(님성용) 민트 L',1,'2056413251','2_테라(남) 민트 L'],
+  ['C','일반상품','사이즈:XL/0원/1개','00027',1,'999','XL'],
+  ['D','접이식 캠핑화로대 420x420','','273',1,'999','접이식 캠핑화로대 420x420']
+];
+for(const [order,product,option,alias,qty,id] of rows){const r=ws.addRow([]);r.getCell(1).value=order;r.getCell(12).value=product;r.getCell(13).value=option;r.getCell(14).value=alias;r.getCell(17).value=qty;r.getCell(23).value=id;}
+context.__ORDER_CLEANER_TEST__.processOrderWorkbook(wb);
+const reopened=new ExcelJS.Workbook();await reopened.xlsx.load(await wb.xlsx.writeBuffer());
+for(let i=0;i<rows.length;i++){assert.equal(reopened.getWorksheet('작업').getCell(i+2,14).value,rows[i][6]);assert.equal(reopened.getWorksheet('20261020_원본').getCell(i+2,14).value,rows[i][6]);}
+console.log('synthetic XLSX: new exceptions, numeric fallback and original N sync passed');
