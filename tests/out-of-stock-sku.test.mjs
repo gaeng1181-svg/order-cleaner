@@ -47,3 +47,20 @@ const noHeader=new ExcelJS.Workbook();noHeader.addWorksheet('숫자').getCell('A
 assert.throws(()=>fresh.api.extractSkuIdsFromWorkbook(noHeader),/SKU ID 열을 찾을 수 없습니다/);
 console.log('out-of-stock SKU: 42 seed, input parsing, exact match, variable Excel ranges, blanks, moved headers, duplicates, and missing-header cases passed');
 
+
+const direct=harness(['2688717725','26887177250','2688717893','00123']);
+let deletion=direct.api.removeOutOfStockSkus([' 2688717725 ','2688717725','9999999999','']);
+assert.deepEqual(JSON.parse(JSON.stringify(deletion)),{deletedCount:1,missingCount:1,totalCount:3});
+assert.equal(direct.api.isOutOfStockSku('26887177250'),true);
+assert.equal(direct.api.isOutOfStockSku('00123'),true);
+const restored=harness(JSON.parse(direct.storage.get(direct.api.OOS_KEY)));
+assert.equal(restored.api.isOutOfStockSku('2688717725'),false,'deleted seed is not recreated on reload');
+for(const input of ['2688717893\n00123','2688717893, 00123']){
+  const h=harness(['2688717893','00123','keep']);
+  const result=h.api.removeOutOfStockSkus(h.api.parseSkuInput(input));
+  assert.equal(result.deletedCount,2);assert.deepEqual(Array.from(h.api.getSkus()),['keep']);
+}
+assert.equal(restored.api.removeOutOfStockSkus(['not-present']).deletedCount,0);
+const afterDeleteWb=new ExcelJS.Workbook(),afterDeleteWs=afterDeleteWb.addWorksheet('発注');
+assert.equal(restored.api.applyOutOfStockFill(afterDeleteWs.addRow(['data']),'2688717725'),false,'new XLSX output no longer highlights deleted SKU');
+console.log('direct SKU deletion: exact match, multiple separators, deduplication, missing IDs, leading zeros and persistent deletion passed');
